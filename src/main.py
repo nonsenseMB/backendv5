@@ -1,11 +1,15 @@
 from contextlib import asynccontextmanager
+import time
+import uuid
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.admin import router as admin_router
 from src.core.config import settings
 from src.core.logging.config import configure_logging, get_logger
+from src.core.context import set_request_context, clear_request_context, RequestContext
+from src.core.logging.audit import log_audit_event, AuditEventType, AuditSeverity
 
 # Initialize logging system
 configure_logging()
@@ -39,10 +43,32 @@ async def lifespan(app: FastAPI):
     logger.info("🗂️  Started automatic log cleanup for GDPR compliance",
                 retention_days=90, log_directory=str(log_directory))
 
+    # Log application startup
+    log_audit_event(
+        event_type=AuditEventType.SYSTEM_START,
+        severity=AuditSeverity.LOW,
+        details={
+            "app_name": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "environment": getattr(settings, 'ENVIRONMENT', 'development')
+        }
+    )
+
     yield
 
     # Shutdown
     print("Shutting down...")
+    
+    # Log application shutdown
+    log_audit_event(
+        event_type=AuditEventType.SYSTEM_STOP,
+        severity=AuditSeverity.LOW,
+        details={
+            "app_name": settings.APP_NAME,
+            "version": settings.APP_VERSION
+        }
+    )
+    
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -64,6 +90,72 @@ app.add_middleware(
     allow_methods=settings.CORS_ALLOW_METHODS,
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+# Logging middleware - MUST be added first to catch all requests
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    """Add request context and log all requests/responses."""
+    start_time = time.time()
+    
+    # Generate or extract request ID
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    
+    # Set request context for all logs in this request
+    context = RequestContext(
+        request_id=request_id,
+        tenant_id=request.headers.get("X-Tenant-ID"),
+        user_id=getattr(request.state, "user_id", None) if hasattr(request.state, "user_id") else None,
+        session_id=request.headers.get("X-Session-ID"),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("User-Agent")
+    )
+    set_request_context(context)
+    
+    # Log request
+    logger.info(
+        "Request started",
+        method=request.method,
+        path=request.url.path,
+        query_params=dict(request.query_params) if request.query_params else None
+    )
+    
+    try:
+        # Process request
+        response = await call_next(request)
+        
+        # Calculate duration
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Log response
+        logger.info(
+            "Request completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 2)
+        )
+        
+        # Add request ID to response headers
+        response.headers["X-Request-ID"] = request_id
+        
+        return response
+        
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Log error
+        logger.error(
+            "Request failed",
+            method=request.method,
+            path=request.url.path,
+            error=str(e),
+            duration_ms=round(duration_ms, 2),
+            exc_info=True
+        )
+        raise
+    finally:
+        # Clear context
+        clear_request_context()
 
 # Include admin API for GDPR management
 app.include_router(admin_router)
