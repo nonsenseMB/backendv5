@@ -1,12 +1,11 @@
 """
 Database session management with async support.
 """
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from core.config import settings
-
 
 # Create async engine
 engine = create_async_engine(
@@ -30,7 +29,7 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency to get async database session.
-    
+
     Yields:
         AsyncSession: Database session
     """
@@ -48,11 +47,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     """Initialize database (create tables if needed)."""
     # Import all models to ensure they're registered
-    from infrastructure.database.models import (
-        tenant, auth, conversation, llm, memory, team, agent
-    )  # noqa
     from infrastructure.database.base import Base
-    
+
     async with engine.begin() as conn:
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

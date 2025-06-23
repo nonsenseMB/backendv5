@@ -1,15 +1,15 @@
-from contextlib import asynccontextmanager
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.admin import router as admin_router
 from src.core.config import settings
+from src.core.context import RequestContext, clear_request_context, set_request_context
+from src.core.logging.audit import AuditEventType, AuditSeverity, log_audit_event
 from src.core.logging.config import configure_logging, get_logger
-from src.core.context import set_request_context, clear_request_context, RequestContext
-from src.core.logging.audit import log_audit_event, AuditEventType, AuditSeverity
 
 # Initialize logging system
 configure_logging()
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("Shutting down...")
-    
+
     # Log application shutdown
     log_audit_event(
         event_type=AuditEventType.SYSTEM_STOP,
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
             "version": settings.APP_VERSION
         }
     )
-    
+
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -96,10 +96,10 @@ app.add_middleware(
 async def logging_middleware(request: Request, call_next):
     """Add request context and log all requests/responses."""
     start_time = time.time()
-    
+
     # Generate or extract request ID
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-    
+
     # Set request context for all logs in this request
     context = RequestContext(
         request_id=request_id,
@@ -110,7 +110,7 @@ async def logging_middleware(request: Request, call_next):
         user_agent=request.headers.get("User-Agent")
     )
     set_request_context(context)
-    
+
     # Log request
     logger.info(
         "Request started",
@@ -118,14 +118,14 @@ async def logging_middleware(request: Request, call_next):
         path=request.url.path,
         query_params=dict(request.query_params) if request.query_params else None
     )
-    
+
     try:
         # Process request
         response = await call_next(request)
-        
+
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
-        
+
         # Log response
         logger.info(
             "Request completed",
@@ -134,15 +134,15 @@ async def logging_middleware(request: Request, call_next):
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2)
         )
-        
+
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
-        
+
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        
+
         # Log error
         logger.error(
             "Request failed",

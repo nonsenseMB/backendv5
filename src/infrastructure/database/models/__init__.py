@@ -3,20 +3,23 @@ Database models package.
 Import all models here for Alembic auto-discovery.
 """
 
-from .tenant import Tenant, TenantUser
+from .agent import Agent
 from .auth import User, UserDevice
-from .llm import LLMProvider, LLMAPIKey
-from .conversation import Conversation, Message, ConversationCheckpoint
+from .conversation import Conversation, ConversationCheckpoint, Message
+from .document import Document, DocumentContent, DocumentPermission, DocumentShare
+from .knowledge import DocumentVector, KnowledgeBase, KnowledgeEntity, KnowledgeRelation
+from .llm import LLMAPIKey, LLMProvider
 from .memory import UserPreferences
 from .team import Team, TeamMember
-from .agent import Agent
+from .tenant import Tenant, TenantUser
+from .tool import MCPServer, Tool, ToolDefinition, ToolExecution
 
 __all__ = [
     # Tenant models
     "Tenant",
     "TenantUser",
     # Auth models
-    "User", 
+    "User",
     "UserDevice",
     # LLM models
     "LLMProvider",
@@ -32,4 +35,19 @@ __all__ = [
     "TeamMember",
     # Agent models
     "Agent",
+    # Document System models
+    "Document",
+    "DocumentContent",
+    "DocumentPermission",
+    "DocumentShare",
+    # Knowledge Graph models
+    "KnowledgeBase",
+    "KnowledgeEntity",
+    "KnowledgeRelation",
+    "DocumentVector",
+    # Tool System models
+    "Tool",
+    "ToolDefinition",
+    "MCPServer",
+    "ToolExecution",
 ]

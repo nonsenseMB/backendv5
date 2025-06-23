@@ -1,11 +1,9 @@
 """
 Agent repository implementation.
 """
-from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import and_, or_, select
 
 from infrastructure.database.models.agent import Agent
 from infrastructure.database.repositories.base import TenantAwareRepository
@@ -13,12 +11,12 @@ from infrastructure.database.repositories.base import TenantAwareRepository
 
 class AgentRepository(TenantAwareRepository[Agent]):
     """Repository for Agent model."""
-    
+
     async def get_active_agents(
         self,
         skip: int = 0,
         limit: int = 100
-    ) -> List[Agent]:
+    ) -> list[Agent]:
         """Get all active agents for the tenant."""
         return await self.get_multi(
             skip=skip,
@@ -26,8 +24,8 @@ class AgentRepository(TenantAwareRepository[Agent]):
             filters={'is_active': True},
             order_by='name'
         )
-    
-    async def get_by_name(self, name: str) -> Optional[Agent]:
+
+    async def get_by_name(self, name: str) -> Agent | None:
         """Get agent by name within the tenant."""
         stmt = select(Agent).where(
             and_(
@@ -37,8 +35,8 @@ class AgentRepository(TenantAwareRepository[Agent]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-    
-    async def get_system_agents(self) -> List[Agent]:
+
+    async def get_system_agents(self) -> list[Agent]:
         """Get all system agents for the tenant."""
         return await self.get_multi(
             filters={
@@ -46,13 +44,13 @@ class AgentRepository(TenantAwareRepository[Agent]):
                 'is_active': True
             }
         )
-    
+
     async def search_agents(
         self,
         query: str,
         include_inactive: bool = False,
         limit: int = 20
-    ) -> List[Agent]:
+    ) -> list[Agent]:
         """Search agents by name or description."""
         search_term = f"%{query}%"
         stmt = select(Agent).where(
@@ -64,40 +62,40 @@ class AgentRepository(TenantAwareRepository[Agent]):
                 )
             )
         )
-        
+
         if not include_inactive:
             stmt = stmt.where(Agent.is_active == True)
-        
+
         stmt = stmt.limit(limit)
-        
+
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-    
-    
+
+
     async def update_graph_definition(
         self,
         agent_id: UUID,
         graph_definition: dict
-    ) -> Optional[Agent]:
+    ) -> Agent | None:
         """Update agent graph definition."""
         return await self.update(agent_id, graph_definition=graph_definition)
-    
+
     async def update_model_preferences(
         self,
         agent_id: UUID,
         model_preferences: dict
-    ) -> Optional[Agent]:
+    ) -> Agent | None:
         """Update agent model preferences."""
         return await self.update(agent_id, model_preferences=model_preferences)
-    
-    async def activate_agent(self, agent_id: UUID) -> Optional[Agent]:
+
+    async def activate_agent(self, agent_id: UUID) -> Agent | None:
         """Activate an agent."""
         return await self.update(agent_id, is_active=True)
-    
-    async def deactivate_agent(self, agent_id: UUID) -> Optional[Agent]:
+
+    async def deactivate_agent(self, agent_id: UUID) -> Agent | None:
         """Deactivate an agent."""
         return await self.update(agent_id, is_active=False)
-    
+
     async def is_name_available(self, name: str) -> bool:
         """Check if an agent name is available within the tenant."""
         existing = await self.get_by_name(name)

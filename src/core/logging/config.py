@@ -139,31 +139,31 @@ def _add_request_context(
 
 def _create_processor_chain(config: LogConfig, use_console_renderer: bool = False) -> list:
     """Create the full processor chain based on configuration.
-    
+
     Args:
     ----
         config: Logging configuration
         use_console_renderer: Whether to use console renderer (vs JSON)
-        
+
     Returns:
     -------
         List of processors for structlog
-        
+
     """
     processors = []
-    
+
     # Add PII redaction filter as FIRST processor for GDPR compliance
     if config.enable_pii_filtering:
         from .filters import PIIRedactionFilter
         processors.append(PIIRedactionFilter())
-    
+
     # Add timestamp if configured
     if config.add_timestamp:
         processors.append(structlog.processors.TimeStamper(fmt="iso"))
-    
+
     # Add standard processors
     processors.extend(_add_custom_processors())
-    
+
     # Add caller info if configured
     if config.add_caller_info:
         processors.append(
@@ -175,25 +175,25 @@ def _create_processor_chain(config: LogConfig, use_console_renderer: bool = Fals
                 ]
             )
         )
-    
+
     # Add thread info if configured
     if config.add_thread_info:
         processors.append(structlog.processors.add_thread_info)
-    
+
     # Add final renderer
     if use_console_renderer and config.format == LogFormat.CONSOLE:
         try:
             from src.core.logging.console import RichConsoleRenderer
             processors.append(RichConsoleRenderer(
-                show_path=True, 
-                show_timestamp=True, 
+                show_path=True,
+                show_timestamp=True,
                 show_tenant=True
             ))
         except ImportError:
             processors.append(structlog.dev.ConsoleRenderer())
     else:
         processors.append(structlog.processors.JSONRenderer())
-    
+
     return processors
 
 
@@ -275,10 +275,10 @@ def configure_logging(config: LogConfig | None = None) -> None:
     # Create console handler with custom formatting
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(config.level.value)
-    
+
     # Create console processors (with Rich formatting)
     console_processors = _create_processor_chain(config, use_console_renderer=True)
-    
+
     # Create console formatter
     console_formatter = structlog.stdlib.ProcessorFormatter(
         processor=structlog.dev.ConsoleRenderer() if config.format == LogFormat.JSON else console_processors[-1],
@@ -286,7 +286,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
-    
+
     # Add file handler if log_file_path is configured
     if config.log_file_path:
         try:
@@ -294,7 +294,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
             log_path = Path(config.log_file_path)
             log_dir = log_path.parent
             log_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Create file handler with rotation support
             from logging.handlers import RotatingFileHandler
             file_handler = RotatingFileHandler(
@@ -304,10 +304,10 @@ def configure_logging(config: LogConfig | None = None) -> None:
                 encoding='utf-8'
             )
             file_handler.setLevel(config.level.value)
-            
+
             # Create file processors (always JSON for files)
             file_processors = _create_processor_chain(config, use_console_renderer=False)
-            
+
             # Create file formatter
             file_formatter = structlog.stdlib.ProcessorFormatter(
                 processor=structlog.processors.JSONRenderer(),
@@ -315,12 +315,12 @@ def configure_logging(config: LogConfig | None = None) -> None:
             )
             file_handler.setFormatter(file_formatter)
             root_logger.addHandler(file_handler)
-            
+
             print(f"📝 Logging to file: {config.log_file_path}")
         except Exception as e:
             print(f"⚠️  WARNING: Could not create log file at {config.log_file_path}: {e}")
             print("⚠️  Falling back to console-only logging")
-    
+
     # Configure structlog
     structlog.configure(
         processors=console_processors if config.format == LogFormat.CONSOLE else file_processors,
@@ -329,7 +329,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-    
+
     # Log compliance status
     if config.enable_pii_filtering:
         print("🔒 PII filtering ENABLED for GDPR compliance")

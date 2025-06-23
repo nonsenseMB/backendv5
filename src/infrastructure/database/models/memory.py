@@ -2,7 +2,7 @@
 User preferences model - the only memory-related model that belongs in PostgreSQL.
 Actual memory/embeddings are stored in vector databases (Milvus/Chroma).
 """
-from sqlalchemy import Boolean, Column, ForeignKey, JSON
+from sqlalchemy import JSON, Column, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -15,10 +15,10 @@ class UserPreferences(BaseModel):
     This belongs in PostgreSQL as it's structured configuration data, not embeddings.
     """
     __tablename__ = 'user_preferences'
-    
+
     # Foreign Key
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
-    
+
     # Language & Localization
     language_preferences = Column(JSON, default=lambda: {
         "primary_language": "en",
@@ -27,7 +27,7 @@ class UserPreferences(BaseModel):
         "time_format": "12h",
         "timezone": "UTC"
     })
-    
+
     # Interface Preferences
     interface_preferences = Column(JSON, default=lambda: {
         "theme": "system",  # light, dark, system
@@ -36,7 +36,7 @@ class UserPreferences(BaseModel):
         "show_avatars": True,
         "animation_speed": "normal"
     })
-    
+
     # Notification Settings
     notification_preferences = Column(JSON, default=lambda: {
         "email_notifications": True,
@@ -46,7 +46,7 @@ class UserPreferences(BaseModel):
         "dm_notifications": True,
         "team_notifications": True
     })
-    
+
     # AI/Assistant Preferences
     ai_preferences = Column(JSON, default=lambda: {
         "preferred_model": None,
@@ -56,7 +56,7 @@ class UserPreferences(BaseModel):
         "stream_responses": True,
         "auto_suggestions": True
     })
-    
+
     # Privacy Settings
     privacy_settings = Column(JSON, default=lambda: {
         "profile_visibility": "team",  # public, team, private
@@ -65,9 +65,9 @@ class UserPreferences(BaseModel):
         "read_receipts": True,
         "data_retention_days": 365
     })
-    
+
     # Relationships
     user = relationship("User", back_populates="preferences")
-    
+
     def __repr__(self):
         return f"<UserPreferences(user_id={self.user_id})>"

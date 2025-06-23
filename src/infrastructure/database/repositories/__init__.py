@@ -1,14 +1,27 @@
 """
 Database repositories.
 """
-from .base import BaseRepository, TenantAwareRepository
-from .user import UserRepository, UserDeviceRepository
-from .tenant import TenantRepository, TenantUserRepository
-from .conversation import ConversationRepository, MessageRepository, ConversationCheckpointRepository
-from .llm import LLMProviderRepository, LLMAPIKeyRepository
-from .memory import UserPreferencesRepository
 from .agent import AgentRepository
-from .team import TeamRepository, TeamMemberRepository
+from .base import BaseRepository, TenantAwareRepository
+from .conversation import ConversationCheckpointRepository, ConversationRepository, MessageRepository
+from .document import (
+    DocumentContentRepository,
+    DocumentPermissionRepository,
+    DocumentRepository,
+    DocumentShareRepository,
+)
+from .knowledge import (
+    DocumentVectorRepository,
+    KnowledgeBaseRepository,
+    KnowledgeEntityRepository,
+    KnowledgeRelationRepository,
+)
+from .llm import LLMAPIKeyRepository, LLMProviderRepository
+from .memory import UserPreferencesRepository
+from .team import TeamMemberRepository, TeamRepository
+from .tenant import TenantRepository, TenantUserRepository
+from .tool import MCPServerRepository, ToolDefinitionRepository, ToolExecutionRepository, ToolRepository
+from .user import UserDeviceRepository, UserRepository
 
 __all__ = [
     # Base
@@ -34,4 +47,19 @@ __all__ = [
     # Team
     'TeamRepository',
     'TeamMemberRepository',
+    # Document System
+    'DocumentRepository',
+    'DocumentContentRepository',
+    'DocumentPermissionRepository',
+    'DocumentShareRepository',
+    # Knowledge Graph
+    'KnowledgeBaseRepository',
+    'KnowledgeEntityRepository',
+    'KnowledgeRelationRepository',
+    'DocumentVectorRepository',
+    # Tool System
+    'ToolRepository',
+    'ToolDefinitionRepository',
+    'MCPServerRepository',
+    'ToolExecutionRepository',
 ]
