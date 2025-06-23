@@ -1,0 +1,58 @@
+version: 1
+metadata:
+  name: nAI OAuth2 Basic Setup
+  labels:
+    blueprints.goauthentik.io/description: Basic OAuth2 setup for nAI - redirect URIs must be added manually
+entries:
+  # Create Backend Provider without redirect_uris
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    identifiers:
+      name: nAI Backend OAuth2
+    attrs:
+      name: nAI Backend OAuth2
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: confidential
+      client_id: nai-backend
+      client_secret: !Env AUTHENTIK_BACKEND_CLIENT_SECRET
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+
+  # Create Frontend Provider without redirect_uris
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    identifiers:
+      name: nAI Frontend OAuth2
+    attrs:
+      name: nAI Frontend OAuth2
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: public
+      client_id: nai-frontend
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+
+  # Backend Application
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: nai-backend
+    attrs:
+      name: nAI Backend
+      slug: nai-backend
+      provider: !Find [authentik_providers_oauth2.oauth2provider, [name, nAI Backend OAuth2]]
+      policy_engine_mode: any
+
+  # Frontend Application
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: nai-frontend
+    attrs:
+      name: nAI Frontend
+      slug: nai-frontend
+      provider: !Find [authentik_providers_oauth2.oauth2provider, [name, nAI Frontend OAuth2]]
+      policy_engine_mode: any

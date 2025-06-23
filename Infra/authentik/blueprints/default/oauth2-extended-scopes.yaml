@@ -1,0 +1,97 @@
+version: 1
+metadata:
+  name: nAI OAuth2 Extended Scopes
+  labels:
+    blueprints.goauthentik.io/description: Extended scope mappings for nAI applications
+entries:
+  # Custom Scope für User Metadata
+  - model: authentik_providers_oauth2.scopemapping
+    state: present
+    identifiers:
+      name: nAI User Metadata
+    attrs:
+      name: nAI User Metadata
+      scope_name: nai:metadata
+      description: "User metadata for nAI applications"
+      expression: |
+        return {
+            "user_id": str(request.user.pk),
+            "username": request.user.username,
+            "full_name": request.user.name,
+            "is_active": request.user.is_active,
+            "date_joined": request.user.date_joined.isoformat() if hasattr(request.user.date_joined, 'isoformat') else str(request.user.date_joined),
+            "groups": [group.name for group in request.user.ak_groups.all()],
+            "is_admin": request.user.is_superuser,
+            "is_backend_user": ak_is_group_member(request.user, name="nAI Backend Users"),
+            "is_frontend_user": ak_is_group_member(request.user, name="nAI Users")
+        }
+
+  # Custom Scope für API Access
+  - model: authentik_providers_oauth2.scopemapping
+    state: present
+    identifiers:
+      name: nAI API Access
+    attrs:
+      name: nAI API Access
+      scope_name: nai:api
+      description: "API access permissions for nAI"
+      expression: |
+        permissions = []
+
+        # Basis API Zugriff für alle authentifizierten Benutzer
+        if request.user.is_authenticated:
+            permissions.extend([
+                "api:read",
+                "conversations:read",
+                "conversations:write",
+                "memories:read",
+                "memories:write"
+            ])
+
+        # Erweiterte Permissions für Backend Users
+        if ak_is_group_member(request.user, name="nAI Backend Users"):
+            permissions.extend([
+                "tools:execute",
+                "agents:manage",
+                "knowledge:upload",
+                "knowledge:delete"
+            ])
+
+        # Admin Permissions
+        if request.user.is_superuser:
+            permissions.extend([
+                "admin:all",
+                "users:manage",
+                "system:configure"
+            ])
+
+        return {
+            "permissions": permissions,
+            "api_version": "v1"
+        }
+
+  # Update Backend Provider mit neuen Scopes
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    identifiers:
+      name: nAI Backend Provider
+    attrs:
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, nAI User Metadata]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, nAI API Access]]
+
+  # Update Frontend Provider mit neuen Scopes
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    identifiers:
+      name: nAI Frontend Provider
+    attrs:
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, nAI User Metadata]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, nAI API Access]]
