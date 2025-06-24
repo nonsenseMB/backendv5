@@ -5,8 +5,8 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from infrastructure.database.models.auth import User, UserDevice
-from infrastructure.database.repositories.base import BaseRepository
+from src.infrastructure.database.models.auth import User, UserDevice
+from src.infrastructure.database.repositories.base import BaseRepository
 
 
 class UserRepository(BaseRepository[User]):

@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, select
 
-from infrastructure.database.models.llm import LLMAPIKey, LLMProvider
-from infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
+from src.infrastructure.database.models.llm import LLMAPIKey, LLMProvider
+from src.infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
 
 
 class LLMProviderRepository(TenantAwareRepository[LLMProvider]):

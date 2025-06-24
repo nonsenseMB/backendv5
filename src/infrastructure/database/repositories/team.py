@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
 
-from infrastructure.database.models.team import Team, TeamMember
-from infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
+from src.infrastructure.database.models.team import Team, TeamMember
+from src.infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
 
 
 class TeamRepository(TenantAwareRepository[Team]):

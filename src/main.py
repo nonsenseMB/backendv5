@@ -6,6 +6,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.admin import router as admin_router
+from src.api.exceptions.auth_handlers import register_auth_exception_handlers
+from src.api.middleware.auth import jwt_validation_middleware
+from src.api.v1 import router as v1_router
 from src.core.config import settings
 from src.core.context import RequestContext, clear_request_context, set_request_context
 from src.core.logging.audit import AuditEventType, AuditSeverity, log_audit_event
@@ -21,6 +24,26 @@ logger.info("Starting Backend v5...")
 async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+
+    # Initialize Redis connection
+    from src.infrastructure.cache import get_redis_client
+    logger.info("Initializing Redis connection...")
+    try:
+        redis_client = await get_redis_client()
+        logger.info("Redis connection established")
+    except Exception as e:
+        logger.warning(f"Redis connection failed: {e}. Continuing without Redis...")
+        redis_client = None
+
+    # Run security checks before starting the application
+    from src.core.auth.security_checks import run_startup_security_checks
+
+    if settings.APP_ENV != "development":
+        logger.info("Running startup security checks...")
+        await run_startup_security_checks()
+        logger.info("Security checks completed successfully")
+    else:
+        logger.warning("Skipping security checks in development mode")
 
     # Start background log cleanup for GDPR compliance
     import asyncio
@@ -74,6 +97,12 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         logger.info("🛑 Log cleanup task cancelled")
+    
+    # Close Redis connection
+    if redis_client:
+        logger.info("Closing Redis connection...")
+        await redis_client.disconnect()
+        logger.info("Redis connection closed")
 
 
 app = FastAPI(
@@ -91,7 +120,20 @@ app.add_middleware(
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
-# Logging middleware - MUST be added first to catch all requests
+# JWT validation middleware - validates tokens and sets user context
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """JWT validation middleware."""
+    return await jwt_validation_middleware(request, call_next)
+
+# Tenant context middleware - extracts and validates tenant context
+@app.middleware("http")
+async def tenant_middleware(request: Request, call_next):
+    """Tenant context injection middleware."""
+    from src.api.middleware.tenant import tenant_injection_middleware
+    return await tenant_injection_middleware(request, call_next)
+
+# Logging middleware - MUST be added after auth and tenant to log full context
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     """Add request context and log all requests/responses."""
@@ -100,12 +142,16 @@ async def logging_middleware(request: Request, call_next):
     # Generate or extract request ID
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
 
+    # Get tenant ID from context (set by tenant middleware)
+    from src.core.context import get_tenant_context
+    tenant_id = get_tenant_context()
+    
     # Set request context for all logs in this request
     context = RequestContext(
         request_id=request_id,
-        tenant_id=request.headers.get("X-Tenant-ID"),
+        tenant_id=tenant_id or request.headers.get("X-Tenant-ID"),
         user_id=getattr(request.state, "user_id", None) if hasattr(request.state, "user_id") else None,
-        session_id=request.headers.get("X-Session-ID"),
+        session_id=getattr(request.state, "session_id", None) if hasattr(request.state, "session_id") else request.headers.get("X-Session-ID"),
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("User-Agent")
     )
@@ -157,7 +203,11 @@ async def logging_middleware(request: Request, call_next):
         # Clear context
         clear_request_context()
 
-# Include admin API for GDPR management
+# Register exception handlers
+register_auth_exception_handlers(app)
+
+# Include routers
+app.include_router(v1_router)
 app.include_router(admin_router)
 
 
@@ -244,12 +294,26 @@ async def health():
             "message": "Redis health check not implemented"
         }
 
+        # Security Configuration Status
+        health_status["security"] = {
+            "password_auth_enabled": settings.PASSWORD_AUTH_ENABLED,
+            "device_auth_required": settings.DEVICE_AUTH_REQUIRED,
+            "mfa_enforced": settings.ENFORCE_MFA,
+            "webauthn_verification": settings.WEBAUTHN_USER_VERIFICATION,
+            "session_timeout_minutes": settings.SESSION_TIMEOUT_MINUTES,
+            "authentik_configured": bool(settings.AUTHENTIK_URL and settings.AUTHENTIK_TOKEN)
+        }
+
         # Overall health assessment
         warnings = []
         if not config.enable_pii_filtering:
             warnings.append("PII filtering disabled - GDPR compliance risk")
         if not log_dir.exists():
             warnings.append("Log directory missing")
+        if settings.PASSWORD_AUTH_ENABLED:
+            warnings.append("Password authentication is enabled - security risk")
+        if not settings.DEVICE_AUTH_REQUIRED:
+            warnings.append("Device authentication not required - security risk")
 
         if warnings:
             health_status["status"] = "degraded"

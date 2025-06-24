@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from infrastructure.database.base import Base
+from src.infrastructure.database.base import Base
 
 ModelType = TypeVar("ModelType", bound=Base)
 
@@ -209,9 +209,20 @@ class BaseRepository(Generic[ModelType]):
 class TenantAwareRepository(BaseRepository[ModelType]):
     """Base repository for tenant-aware models."""
 
-    def __init__(self, model: type[ModelType], session: AsyncSession, tenant_id: UUID):
+    def __init__(self, model: type[ModelType], session: AsyncSession, tenant_id: UUID | None = None):
         super().__init__(model, session)
-        self.tenant_id = tenant_id
+        
+        # If no tenant_id provided, try to get from context
+        if tenant_id is None:
+            from src.core.context import get_tenant_context
+            context_tenant_id = get_tenant_context()
+            if context_tenant_id:
+                from uuid import UUID
+                self.tenant_id = UUID(context_tenant_id)
+            else:
+                raise ValueError("Tenant ID is required for TenantAwareRepository")
+        else:
+            self.tenant_id = tenant_id
 
     async def get(self, id: UUID, load_relationships: list[str] = None) -> ModelType | None:
         """Get a record by ID within the current tenant."""

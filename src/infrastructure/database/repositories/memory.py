@@ -4,8 +4,8 @@ Actual memory operations (embeddings, RAG) should use vector database services.
 """
 from uuid import UUID
 
-from infrastructure.database.models.memory import UserPreferences
-from infrastructure.database.repositories.base import BaseRepository
+from src.infrastructure.database.models.memory import UserPreferences
+from src.infrastructure.database.repositories.base import BaseRepository
 
 
 class UserPreferencesRepository(BaseRepository[UserPreferences]):

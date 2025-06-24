@@ -5,45 +5,45 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from infrastructure.database.models.agent import Agent
-from infrastructure.database.models.auth import User, UserDevice
-from infrastructure.database.models.conversation import Conversation, ConversationCheckpoint, Message
-from infrastructure.database.models.document import Document, DocumentContent, DocumentPermission, DocumentShare
-from infrastructure.database.models.knowledge import DocumentVector, KnowledgeBase, KnowledgeEntity, KnowledgeRelation
-from infrastructure.database.models.llm import LLMAPIKey, LLMProvider
-from infrastructure.database.models.memory import UserPreferences
-from infrastructure.database.models.team import Team, TeamMember
-from infrastructure.database.models.tenant import Tenant, TenantUser
-from infrastructure.database.models.tool import MCPServer, Tool, ToolDefinition, ToolExecution
-from infrastructure.database.repositories.agent import AgentRepository
-from infrastructure.database.repositories.conversation import (
+from src.infrastructure.database.models.agent import Agent
+from src.infrastructure.database.models.auth import User, UserDevice
+from src.infrastructure.database.models.conversation import Conversation, ConversationCheckpoint, Message
+from src.infrastructure.database.models.document import Document, DocumentContent, DocumentPermission, DocumentShare
+from src.infrastructure.database.models.knowledge import DocumentVector, KnowledgeBase, KnowledgeEntity, KnowledgeRelation
+from src.infrastructure.database.models.llm import LLMAPIKey, LLMProvider
+from src.infrastructure.database.models.memory import UserPreferences
+from src.infrastructure.database.models.team import Team, TeamMember
+from src.infrastructure.database.models.tenant import Tenant, TenantUser
+from src.infrastructure.database.models.tool import MCPServer, Tool, ToolDefinition, ToolExecution
+from src.infrastructure.database.repositories.agent import AgentRepository
+from src.infrastructure.database.repositories.conversation import (
     ConversationCheckpointRepository,
     ConversationRepository,
     MessageRepository,
 )
-from infrastructure.database.repositories.document import (
+from src.infrastructure.database.repositories.document import (
     DocumentContentRepository,
     DocumentPermissionRepository,
     DocumentRepository,
     DocumentShareRepository,
 )
-from infrastructure.database.repositories.knowledge import (
+from src.infrastructure.database.repositories.knowledge import (
     DocumentVectorRepository,
     KnowledgeBaseRepository,
     KnowledgeEntityRepository,
     KnowledgeRelationRepository,
 )
-from infrastructure.database.repositories.llm import LLMAPIKeyRepository, LLMProviderRepository
-from infrastructure.database.repositories.memory import UserPreferencesRepository
-from infrastructure.database.repositories.team import TeamMemberRepository, TeamRepository
-from infrastructure.database.repositories.tenant import TenantRepository, TenantUserRepository
-from infrastructure.database.repositories.tool import (
+from src.infrastructure.database.repositories.llm import LLMAPIKeyRepository, LLMProviderRepository
+from src.infrastructure.database.repositories.memory import UserPreferencesRepository
+from src.infrastructure.database.repositories.team import TeamMemberRepository, TeamRepository
+from src.infrastructure.database.repositories.tenant import TenantRepository, TenantUserRepository
+from src.infrastructure.database.repositories.tool import (
     MCPServerRepository,
     ToolDefinitionRepository,
     ToolExecutionRepository,
     ToolRepository,
 )
-from infrastructure.database.repositories.user import UserDeviceRepository, UserRepository
+from src.infrastructure.database.repositories.user import UserDeviceRepository, UserRepository
 
 
 class UnitOfWork:

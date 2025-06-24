@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from core.config import settings
+from src.core.config import settings
 
 # Create async engine
 engine = create_async_engine(
@@ -47,7 +47,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     """Initialize database (create tables if needed)."""
     # Import all models to ensure they're registered
-    from infrastructure.database.base import Base
+    from src.infrastructure.database.base import Base
 
     async with engine.begin() as conn:
         # Create all tables

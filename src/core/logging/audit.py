@@ -14,6 +14,10 @@ class AuditEventType(Enum):
     LOGIN_FAILED = "LOGIN_FAILED"
     PASSWORD_CHANGE = "PASSWORD_CHANGE"
     PERMISSION_CHANGE = "PERMISSION_CHANGE"
+    AUTH_TOKEN_EXCHANGED = "AUTH_TOKEN_EXCHANGED"
+    AUTH_TOKEN_EXCHANGE_FAILED = "AUTH_TOKEN_EXCHANGE_FAILED"
+    AUTH_TOKEN_REFRESHED = "AUTH_TOKEN_REFRESHED"
+    AUTH_TOKEN_REFRESH_FAILED = "AUTH_TOKEN_REFRESH_FAILED"
 
     # Data Access & Modification
     DATA_ACCESS = "DATA_ACCESS"
@@ -27,6 +31,8 @@ class AuditEventType(Enum):
     SYSTEM_START = "SYSTEM_START"
     SYSTEM_STOP = "SYSTEM_STOP"
     ERROR_OCCURRED = "ERROR_OCCURRED"
+    SECURITY_CHECK = "SECURITY_CHECK"
+    SECURITY_ALERT = "SECURITY_ALERT"
 
     # DSGVO Events
     CONSENT_GIVEN = "CONSENT_GIVEN"
@@ -46,6 +52,7 @@ class AuditSeverity(Enum):
 def log_audit_event(
     event_type: AuditEventType,
     user_id: str | None = None,
+    tenant_id: str | None = None,
     details: dict[str, Any] | None = None,
     severity: AuditSeverity = AuditSeverity.MEDIUM,
     resource: str | None = None,
@@ -57,6 +64,7 @@ def log_audit_event(
     Args:
         event_type: Type of audit event
         user_id: ID of the user performing the action
+        tenant_id: ID of the tenant context
         details: Additional event details (will be PII-filtered)
         severity: Severity level of the event
         resource: Resource being accessed/modified
@@ -70,6 +78,7 @@ def log_audit_event(
         "severity": severity.value,
         "timestamp": datetime.utcnow().isoformat(),
         "user_id": user_id,
+        "tenant_id": tenant_id,
         "resource": resource,
         "action": action,
         **(details or {})

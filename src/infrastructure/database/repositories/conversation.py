@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 
-from infrastructure.database.models.conversation import Conversation, ConversationCheckpoint, Message
-from infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
+from src.infrastructure.database.models.conversation import Conversation, ConversationCheckpoint, Message
+from src.infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
 
 
 class ConversationRepository(TenantAwareRepository[Conversation]):

@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, select
 
-from infrastructure.database.models.tenant import Tenant, TenantUser
-from infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
+from src.infrastructure.database.models.tenant import Tenant, TenantUser
+from src.infrastructure.database.repositories.base import BaseRepository, TenantAwareRepository
 
 
 class TenantRepository(BaseRepository[Tenant]):

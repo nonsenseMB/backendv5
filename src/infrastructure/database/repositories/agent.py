@@ -5,8 +5,8 @@ from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 
-from infrastructure.database.models.agent import Agent
-from infrastructure.database.repositories.base import TenantAwareRepository
+from src.infrastructure.database.models.agent import Agent
+from src.infrastructure.database.repositories.base import TenantAwareRepository
 
 
 class AgentRepository(TenantAwareRepository[Agent]):

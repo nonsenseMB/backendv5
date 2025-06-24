@@ -121,16 +121,41 @@ def _add_request_context(
 ) -> dict[str, Any]:
     """Add request context (tenant_id, request_id, etc.) to log events."""
     try:
-        from src.core.context import get_request_context
+        from src.core.context import get_request_context, get_user_context
 
-        context = get_request_context()
-        if context:
-            if context.tenant_id:
-                event_dict["tenant_id"] = context.tenant_id
-            if context.request_id:
-                event_dict["request_id"] = context.request_id
-            if context.user_id:
-                event_dict["user_id"] = context.user_id
+        # Add request context
+        request_context = get_request_context()
+        if request_context:
+            # Core identifiers
+            if request_context.tenant_id:
+                event_dict["tenant_id"] = request_context.tenant_id
+            if request_context.request_id:
+                event_dict["request_id"] = request_context.request_id
+            if request_context.user_id:
+                event_dict["user_id"] = request_context.user_id
+            if request_context.session_id:
+                event_dict["session_id"] = request_context.session_id
+            
+            # Request details
+            if request_context.method:
+                event_dict["method"] = request_context.method
+            if request_context.path:
+                event_dict["path"] = request_context.path
+            if request_context.ip_address:
+                event_dict["ip_address"] = request_context.ip_address
+            if request_context.device_id:
+                event_dict["device_id"] = request_context.device_id
+        
+        # Add user context
+        user_context = get_user_context()
+        if user_context:
+            if user_context.email:
+                event_dict["user_email"] = user_context.email
+            if user_context.username:
+                event_dict["username"] = user_context.username
+            # Add user permissions count for debugging
+            event_dict["user_permissions_count"] = len(user_context.permissions)
+            
     except Exception:
         # Don't fail logging if context extraction fails
         pass
