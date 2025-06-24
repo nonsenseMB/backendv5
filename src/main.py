@@ -111,6 +111,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Security headers middleware - MUST be first to apply to all responses
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add security headers to all responses."""
+    from src.api.middleware.security import security_headers_middleware as security_middleware
+    return await security_middleware(request, call_next)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
