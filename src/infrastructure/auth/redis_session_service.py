@@ -1,9 +1,7 @@
 """Redis-based session service for managing user sessions."""
-from datetime import UTC, datetime, timedelta
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.core.config import settings
 from src.core.logging import get_logger
 from src.domain.auth.session_service import SessionInfo, SessionService
 from src.infrastructure.cache import RedisClient, get_redis_client
@@ -14,12 +12,12 @@ logger = get_logger(__name__)
 class RedisSessionService(SessionService):
     """Redis-backed session management service."""
 
-    def __init__(self, redis_client: Optional[RedisClient] = None):
-        self.redis: Optional[RedisClient] = redis_client
+    def __init__(self, redis_client: RedisClient | None = None):
+        self.redis: RedisClient | None = redis_client
         self._initialized = False
         self._fallback_sessions = {}  # In-memory fallback when Redis is not available
 
-    async def _ensure_redis(self) -> Optional[RedisClient]:
+    async def _ensure_redis(self) -> RedisClient | None:
         """Ensure Redis client is available."""
         if not self.redis:
             try:
@@ -44,13 +42,13 @@ class RedisSessionService(SessionService):
         self,
         user_id: UUID,
         tenant_id: UUID,
-        external_session_id: Optional[str] = None,
-        created_at: Optional[datetime] = None,
+        external_session_id: str | None = None,
+        created_at: datetime | None = None,
     ) -> UUID:
         """Create a new session in Redis."""
         redis = await self._ensure_redis()
         session_id = uuid4()
-        
+
         session = SessionInfo(
             session_id=session_id,
             user_id=user_id,
@@ -73,7 +71,7 @@ class RedisSessionService(SessionService):
 
         # Calculate TTL in seconds
         ttl = int((session.expires_at - datetime.now(UTC)).total_seconds())
-        
+
         if redis:
             # Store in Redis with expiration
             await redis.set_json(
@@ -102,12 +100,12 @@ class RedisSessionService(SessionService):
     async def validate_session(self, session_id: UUID) -> bool:
         """Validate if a session is still active in Redis."""
         redis = await self._ensure_redis()
-        
+
         if redis:
             session_data = await redis.get_json(self._session_key(session_id))
         else:
             session_data = self._fallback_sessions.get(str(session_id))
-        
+
         if not session_data:
             logger.debug("Session not found in Redis", session_id=str(session_id))
             return False
@@ -118,11 +116,11 @@ class RedisSessionService(SessionService):
 
         # Update last activity
         session_data["last_activity"] = datetime.now(UTC).isoformat()
-        
+
         # Recalculate TTL
         expires_at = datetime.fromisoformat(session_data["expires_at"])
         ttl = int((expires_at - datetime.now(UTC)).total_seconds())
-        
+
         if ttl <= 0:
             logger.debug("Session expired", session_id=str(session_id))
             return False
@@ -139,10 +137,10 @@ class RedisSessionService(SessionService):
 
         return True
 
-    async def get_session(self, session_id: UUID) -> Optional[SessionInfo]:
+    async def get_session(self, session_id: UUID) -> SessionInfo | None:
         """Get session information from Redis."""
         redis = await self._ensure_redis()
-        
+
         if not await self.validate_session(session_id):
             return None
 
@@ -150,7 +148,7 @@ class RedisSessionService(SessionService):
             session_data = await redis.get_json(self._session_key(session_id))
         else:
             session_data = self._fallback_sessions.get(str(session_id))
-        
+
         if not session_data:
             return None
 
@@ -171,25 +169,25 @@ class RedisSessionService(SessionService):
     async def invalidate_session(self, session_id: UUID) -> bool:
         """Invalidate a session in Redis."""
         redis = await self._ensure_redis()
-        
+
         session_data = await redis.get_json(self._session_key(session_id))
-        
+
         if session_data:
             # Mark as inactive but don't delete immediately
             session_data["is_active"] = False
-            
+
             # Keep for audit trail (expire in 1 hour)
             await redis.set_json(
                 self._session_key(session_id),
                 session_data,
                 expire=3600
             )
-            
+
             # Remove user session reference
             user_id = session_data["user_id"]
             user_session_key = f"user_sessions:{user_id}:{session_id}"
             await redis.delete(user_session_key)
-            
+
             logger.info(
                 "Session invalidated in Redis",
                 session_id=str(session_id),
@@ -229,12 +227,12 @@ class RedisSessionService(SessionService):
         """Cleanup expired sessions from Redis."""
         # Redis automatically removes expired keys, so this is mainly for logging
         redis = await self._ensure_redis()
-        
+
         # Count active sessions before cleanup
         pattern = "session:*"
         session_keys = await redis.keys(pattern)
         initial_count = len(session_keys)
-        
+
         # Force check expiration by accessing each key
         expired_count = 0
         for key in session_keys:
@@ -252,15 +250,15 @@ class RedisSessionService(SessionService):
 
         return expired_count
 
-    async def get_active_session_count(self, user_id: Optional[UUID] = None) -> int:
+    async def get_active_session_count(self, user_id: UUID | None = None) -> int:
         """Get count of active sessions."""
         redis = await self._ensure_redis()
-        
+
         if user_id:
             # Count user's active sessions
             pattern = self._user_sessions_pattern(user_id)
             user_session_keys = await redis.keys(pattern)
-            
+
             count = 0
             for key in user_session_keys:
                 session_id_str = await redis.get(key)
@@ -268,17 +266,17 @@ class RedisSessionService(SessionService):
                     session_id = UUID(session_id_str)
                     if await self.validate_session(session_id):
                         count += 1
-            
+
             return count
         else:
             # Count all active sessions
             pattern = "session:*"
             session_keys = await redis.keys(pattern)
-            
+
             count = 0
             for key in session_keys:
                 session_data = await redis.get_json(key)
                 if session_data and session_data.get("is_active", False):
                     count += 1
-            
+
             return count

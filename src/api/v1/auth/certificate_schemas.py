@@ -1,6 +1,5 @@
 """Pydantic schemas for device certificate API."""
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, validator
@@ -8,18 +7,18 @@ from pydantic import BaseModel, Field, validator
 
 class CertificateEnrollmentRequest(BaseModel):
     """Request schema for certificate enrollment."""
-    
+
     device_id: UUID = Field(description="Device ID for certificate enrollment")
     certificate: str = Field(description="PEM encoded X.509 certificate")
-    certificate_chain: Optional[str] = Field(
-        None, 
+    certificate_chain: str | None = Field(
+        None,
         description="PEM encoded certificate chain (optional)"
     )
-    enrollment_token: Optional[str] = Field(
+    enrollment_token: str | None = Field(
         None,
         description="Optional enrollment token for auto-approval"
     )
-    
+
     @validator('certificate')
     def validate_certificate_format(cls, v):
         """Validate certificate is in PEM format."""
@@ -28,7 +27,7 @@ class CertificateEnrollmentRequest(BaseModel):
         if not v.strip().endswith('-----END CERTIFICATE-----'):
             raise ValueError('Certificate must be in PEM format')
         return v.strip()
-    
+
     @validator('certificate_chain')
     def validate_chain_format(cls, v):
         """Validate certificate chain format."""
@@ -43,7 +42,7 @@ class CertificateEnrollmentRequest(BaseModel):
 
 class CertificateEnrollmentResponse(BaseModel):
     """Response schema for certificate enrollment."""
-    
+
     certificate_id: UUID = Field(description="Unique certificate ID")
     serial_number: str = Field(description="Certificate serial number")
     fingerprint_sha256: str = Field(description="Certificate SHA256 fingerprint")
@@ -59,7 +58,7 @@ class CertificateEnrollmentResponse(BaseModel):
 
 class CertificateInfo(BaseModel):
     """Certificate information schema."""
-    
+
     id: UUID = Field(description="Certificate ID")
     device_id: UUID = Field(description="Associated device ID")
     serial_number: str = Field(description="Certificate serial number")
@@ -69,32 +68,32 @@ class CertificateInfo(BaseModel):
     subject_dn: str = Field(description="Subject distinguished name")
     not_before: datetime = Field(description="Validity start date")
     not_after: datetime = Field(description="Validity end date")
-    key_algorithm: Optional[str] = Field(None, description="Key algorithm")
-    key_size: Optional[int] = Field(None, description="Key size in bits")
-    san_dns_names: List[str] = Field(default=[], description="Subject Alternative Name DNS entries")
-    san_ip_addresses: List[str] = Field(default=[], description="Subject Alternative Name IP entries")
-    key_usage: List[str] = Field(default=[], description="Key usage extensions")
-    extended_key_usage: List[str] = Field(default=[], description="Extended key usage extensions")
+    key_algorithm: str | None = Field(None, description="Key algorithm")
+    key_size: int | None = Field(None, description="Key size in bits")
+    san_dns_names: list[str] = Field(default=[], description="Subject Alternative Name DNS entries")
+    san_ip_addresses: list[str] = Field(default=[], description="Subject Alternative Name IP entries")
+    key_usage: list[str] = Field(default=[], description="Key usage extensions")
+    extended_key_usage: list[str] = Field(default=[], description="Extended key usage extensions")
     is_active: bool = Field(description="Whether certificate is active")
     is_trusted: bool = Field(description="Whether certificate is trusted")
     revoked: bool = Field(description="Whether certificate is revoked")
-    revoked_at: Optional[datetime] = Field(None, description="Revocation timestamp")
-    revocation_reason: Optional[str] = Field(None, description="Revocation reason")
-    ocsp_url: Optional[str] = Field(None, description="OCSP responder URL")
-    crl_distribution_points: List[str] = Field(default=[], description="CRL distribution points")
-    last_ocsp_check: Optional[datetime] = Field(None, description="Last OCSP check")
-    last_crl_check: Optional[datetime] = Field(None, description="Last CRL check")
+    revoked_at: datetime | None = Field(None, description="Revocation timestamp")
+    revocation_reason: str | None = Field(None, description="Revocation reason")
+    ocsp_url: str | None = Field(None, description="OCSP responder URL")
+    crl_distribution_points: list[str] = Field(default=[], description="CRL distribution points")
+    last_ocsp_check: datetime | None = Field(None, description="Last OCSP check")
+    last_crl_check: datetime | None = Field(None, description="Last CRL check")
     trust_chain_verified: bool = Field(description="Whether trust chain is verified")
     compliance_checked: bool = Field(description="Whether compliance is checked")
-    compliance_notes: Optional[str] = Field(None, description="Compliance notes")
+    compliance_notes: str | None = Field(None, description="Compliance notes")
     created_at: datetime = Field(description="Certificate creation timestamp")
     updated_at: datetime = Field(description="Certificate update timestamp")
 
 
 class CertificateListResponse(BaseModel):
     """Response schema for certificate list."""
-    
-    certificates: List[CertificateInfo] = Field(description="List of certificates")
+
+    certificates: list[CertificateInfo] = Field(description="List of certificates")
     total: int = Field(description="Total number of certificates")
     active_count: int = Field(description="Number of active certificates")
     expired_count: int = Field(description="Number of expired certificates")
@@ -103,7 +102,7 @@ class CertificateListResponse(BaseModel):
 
 class CertificateRevocationRequest(BaseModel):
     """Request schema for certificate revocation."""
-    
+
     reason: str = Field(
         default="unspecified",
         description="Revocation reason",
@@ -113,8 +112,8 @@ class CertificateRevocationRequest(BaseModel):
 
 class CertificateApprovalRequest(BaseModel):
     """Request schema for certificate approval."""
-    
-    compliance_notes: Optional[str] = Field(
+
+    compliance_notes: str | None = Field(
         None,
         description="Compliance verification notes",
         max_length=1000
@@ -123,17 +122,17 @@ class CertificateApprovalRequest(BaseModel):
 
 class CertificateValidationRequest(BaseModel):
     """Request schema for certificate validation."""
-    
+
     certificate: str = Field(description="PEM encoded certificate to validate")
     check_revocation: bool = Field(
         default=True,
         description="Whether to check revocation status"
     )
-    required_cn: Optional[str] = Field(
+    required_cn: str | None = Field(
         None,
         description="Required common name (optional)"
     )
-    
+
     @validator('certificate')
     def validate_certificate_format(cls, v):
         """Validate certificate is in PEM format."""
@@ -144,16 +143,16 @@ class CertificateValidationRequest(BaseModel):
 
 class CertificateValidationResponse(BaseModel):
     """Response schema for certificate validation."""
-    
+
     is_valid: bool = Field(description="Whether certificate is valid")
-    certificate_info: Optional[dict] = Field(None, description="Certificate information")
-    validation_errors: List[str] = Field(default=[], description="Validation errors")
-    trust_score: Optional[int] = Field(None, description="Calculated trust score")
+    certificate_info: dict | None = Field(None, description="Certificate information")
+    validation_errors: list[str] = Field(default=[], description="Validation errors")
+    trust_score: int | None = Field(None, description="Calculated trust score")
 
 
 class EnrollmentTokenRequest(BaseModel):
     """Request schema for enrollment token generation."""
-    
+
     device_id: UUID = Field(description="Device ID for enrollment")
     validity_hours: int = Field(
         default=24,
@@ -165,7 +164,7 @@ class EnrollmentTokenRequest(BaseModel):
 
 class EnrollmentTokenResponse(BaseModel):
     """Response schema for enrollment token."""
-    
+
     token: str = Field(description="Enrollment token")
     expires_at: datetime = Field(description="Token expiration time")
     device_id: UUID = Field(description="Associated device ID")
@@ -173,26 +172,26 @@ class EnrollmentTokenResponse(BaseModel):
 
 class CertificateTrustReport(BaseModel):
     """Certificate trust report schema."""
-    
+
     certificate_id: UUID = Field(description="Certificate ID")
     serial_number: str = Field(description="Certificate serial number")
     trust_score: int = Field(description="Overall trust score")
     trust_factors: dict = Field(description="Trust score breakdown")
     security_assessment: dict = Field(description="Security assessment")
     compliance_status: dict = Field(description="Compliance status")
-    recommendations: List[str] = Field(description="Security recommendations")
+    recommendations: list[str] = Field(description="Security recommendations")
     last_validated: datetime = Field(description="Last validation timestamp")
 
 
 class MutualTLSValidationRequest(BaseModel):
     """Request schema for mutual TLS validation."""
-    
+
     client_certificate: str = Field(description="Client certificate from TLS handshake")
-    required_cn: Optional[str] = Field(
+    required_cn: str | None = Field(
         None,
         description="Required certificate common name"
     )
-    
+
     @validator('client_certificate')
     def validate_certificate_format(cls, v):
         """Validate certificate format."""
@@ -203,9 +202,9 @@ class MutualTLSValidationRequest(BaseModel):
 
 class MutualTLSValidationResponse(BaseModel):
     """Response schema for mutual TLS validation."""
-    
+
     is_valid: bool = Field(description="Whether mTLS authentication is valid")
-    certificate_info: Optional[dict] = Field(None, description="Certificate information")
-    device_id: Optional[UUID] = Field(None, description="Authenticated device ID")
-    trust_score: Optional[int] = Field(None, description="Device trust score")
-    error: Optional[str] = Field(None, description="Validation error if any")
+    certificate_info: dict | None = Field(None, description="Certificate information")
+    device_id: UUID | None = Field(None, description="Authenticated device ID")
+    trust_score: int | None = Field(None, description="Device trust score")
+    error: str | None = Field(None, description="Validation error if any")

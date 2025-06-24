@@ -135,7 +135,7 @@ def _add_request_context(
                 event_dict["user_id"] = request_context.user_id
             if request_context.session_id:
                 event_dict["session_id"] = request_context.session_id
-            
+
             # Request details
             if request_context.method:
                 event_dict["method"] = request_context.method
@@ -145,7 +145,7 @@ def _add_request_context(
                 event_dict["ip_address"] = request_context.ip_address
             if request_context.device_id:
                 event_dict["device_id"] = request_context.device_id
-        
+
         # Add user context
         user_context = get_user_context()
         if user_context:
@@ -155,7 +155,7 @@ def _add_request_context(
                 event_dict["username"] = user_context.username
             # Add user permissions count for debugging
             event_dict["user_permissions_count"] = len(user_context.permissions)
-            
+
     except Exception:
         # Don't fail logging if context extraction fails
         pass

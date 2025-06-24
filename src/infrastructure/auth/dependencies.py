@@ -1,5 +1,4 @@
 """Dependency injection for authentication services."""
-from typing import Optional
 
 from src.core.auth.jwt_manager import JWTManager
 from src.domain.auth.user_service import UserService
@@ -10,11 +9,11 @@ from src.infrastructure.auth.token_validator import TokenValidator
 from src.infrastructure.database.unit_of_work import UnitOfWork
 
 # Singleton instances
-_token_validator: Optional[TokenValidator] = None
-_jwt_manager: Optional[JWTManager] = None
-_authentik_client: Optional[AuthentikClient] = None
-_redis_session_service: Optional[RedisSessionService] = None
-_token_exchange_service: Optional[TokenExchangeService] = None
+_token_validator: TokenValidator | None = None
+_jwt_manager: JWTManager | None = None
+_authentik_client: AuthentikClient | None = None
+_redis_session_service: RedisSessionService | None = None
+_token_exchange_service: TokenExchangeService | None = None
 
 
 def get_token_validator() -> TokenValidator:
@@ -55,18 +54,18 @@ async def get_token_exchange_service() -> TokenExchangeService:
     if _token_exchange_service is None:
         # Import here to avoid circular imports
         from src.infrastructure.database.session import AsyncSessionLocal
-        
+
         # Create a session and UnitOfWork for UserService
         session = AsyncSessionLocal()
         uow = UnitOfWork(session)
         user_service = UserService(uow)
-        
+
         # Get other dependencies
         authentik_client = get_authentik_client()
         token_validator = get_token_validator()
         jwt_manager = get_jwt_manager()
         session_service = await get_redis_session_service()
-        
+
         # Create token exchange service with all dependencies
         _token_exchange_service = TokenExchangeService(
             authentik_client=authentik_client,

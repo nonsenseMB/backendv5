@@ -10,7 +10,7 @@ __all__ = [
     "JWTValidationMiddleware",
     "jwt_validation_middleware",
     # Context middleware
-    "RequestContextMiddleware", 
+    "RequestContextMiddleware",
     "request_context_middleware",
     # Tenant middleware
     "TenantContextMiddleware",

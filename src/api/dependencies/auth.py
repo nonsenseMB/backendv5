@@ -2,7 +2,6 @@
 Authentication dependencies for FastAPI endpoints.
 Provides user extraction and authentication requirements.
 """
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -36,7 +35,7 @@ def get_current_user_id(request: Request) -> UUID:
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         return UUID(request.state.user_id)
     except (ValueError, TypeError) as e:
@@ -65,7 +64,7 @@ async def get_current_user(
         HTTPException: If user is not found or not authenticated
     """
     user_id = await get_current_user_id(request)
-    
+
     # Get tenant_id from request state for tenant-aware queries
     tenant_id = getattr(request.state, "tenant_id", None)
     if tenant_id:
@@ -73,10 +72,10 @@ async def get_current_user(
             tenant_id = UUID(tenant_id)
         except (ValueError, TypeError):
             tenant_id = None
-    
+
     # Create unit of work with tenant context
     uow = UnitOfWork(session, tenant_id)
-    
+
     user = await uow.users.get(user_id)
     if not user:
         logger.error("User not found in database", user_id=str(user_id))
@@ -84,32 +83,32 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    
+
     if not user.is_active:
         logger.warning("Inactive user attempted access", user_id=str(user_id))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
-    
+
     # Update last seen timestamp
     await uow.users.update_last_seen(user_id)
     await uow.commit()
-    
+
     logger.debug(
         "User authenticated via dependency",
         user_id=str(user_id),
         email=user.email,
         tenant_id=str(tenant_id) if tenant_id else None
     )
-    
+
     return user
 
 
 async def get_optional_user(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
-) -> Optional[User]:
+) -> User | None:
     """
     Get the current user if authenticated, otherwise return None.
     Useful for endpoints that support both authenticated and anonymous access.
@@ -123,13 +122,13 @@ async def get_optional_user(
     """
     if not hasattr(request.state, "user_id") or not request.state.user_id:
         return None
-    
+
     try:
         user_id = UUID(request.state.user_id)
     except (ValueError, TypeError):
         logger.warning("Invalid user_id format in optional auth", user_id=request.state.user_id)
         return None
-    
+
     # Get tenant_id from request state
     tenant_id = getattr(request.state, "tenant_id", None)
     if tenant_id:
@@ -137,17 +136,17 @@ async def get_optional_user(
             tenant_id = UUID(tenant_id)
         except (ValueError, TypeError):
             tenant_id = None
-    
+
     # Create unit of work with tenant context
     uow = UnitOfWork(session, tenant_id)
-    
+
     user = await uow.users.get(user_id)
     if user and user.is_active:
         # Update last seen timestamp
         await uow.users.update_last_seen(user_id)
         await uow.commit()
         return user
-    
+
     return None
 
 

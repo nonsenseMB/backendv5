@@ -3,7 +3,6 @@ Schemas for permission management endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,7 +13,7 @@ class PermissionBase(BaseModel):
     name: str = Field(..., description="Permission name (e.g., 'conversation.create')")
     resource: str = Field(..., description="Resource type (e.g., 'conversation')")
     action: str = Field(..., description="Action (e.g., 'create')")
-    description: Optional[str] = Field(None, description="Permission description")
+    description: str | None = Field(None, description="Permission description")
 
 
 class Permission(PermissionBase):
@@ -30,12 +29,12 @@ class Permission(PermissionBase):
 class RoleBase(BaseModel):
     """Base role schema."""
     name: str = Field(..., description="Role name")
-    description: Optional[str] = Field(None, description="Role description")
+    description: str | None = Field(None, description="Role description")
 
 
 class RoleCreate(RoleBase):
     """Schema for creating a role."""
-    permissions: List[str] = Field(default=[], description="List of permission names")
+    permissions: list[str] = Field(default=[], description="List of permission names")
 
 
 class Role(RoleBase):
@@ -43,7 +42,7 @@ class Role(RoleBase):
     id: UUID
     tenant_id: UUID
     is_system: bool
-    permissions: List[str]
+    permissions: list[str]
     created_at: datetime
     updated_at: datetime
 
@@ -74,9 +73,9 @@ class ResourcePermissionGrant(BaseModel):
     resource_type: str = Field(..., description="Resource type (e.g., 'document')")
     resource_id: UUID = Field(..., description="Resource ID")
     permission: str = Field(..., description="Permission (e.g., 'read', 'write')")
-    user_id: Optional[UUID] = Field(None, description="User ID (if granting to user)")
-    team_id: Optional[UUID] = Field(None, description="Team ID (if granting to team)")
-    expires_at: Optional[datetime] = Field(None, description="Optional expiration time")
+    user_id: UUID | None = Field(None, description="User ID (if granting to user)")
+    team_id: UUID | None = Field(None, description="Team ID (if granting to team)")
+    expires_at: datetime | None = Field(None, description="Optional expiration time")
 
 
 class ResourcePermissionResponse(BaseModel):
@@ -84,12 +83,12 @@ class ResourcePermissionResponse(BaseModel):
     id: UUID
     resource_type: str
     resource_id: UUID
-    user_id: Optional[UUID]
-    team_id: Optional[UUID]
+    user_id: UUID | None
+    team_id: UUID | None
     permission: str
     granted_by: UUID
     granted_at: datetime
-    expires_at: Optional[datetime]
+    expires_at: datetime | None
 
     class Config:
         from_attributes = True
@@ -98,23 +97,23 @@ class ResourcePermissionResponse(BaseModel):
 class PermissionCheckRequest(BaseModel):
     """Schema for permission check requests."""
     permission: str = Field(..., description="Permission to check")
-    resource_type: Optional[str] = Field(None, description="Resource type")
-    resource_id: Optional[UUID] = Field(None, description="Resource ID")
+    resource_type: str | None = Field(None, description="Resource type")
+    resource_id: UUID | None = Field(None, description="Resource ID")
 
 
 class PermissionCheckResponse(BaseModel):
     """Schema for permission check response."""
     has_permission: bool = Field(..., description="Whether user has the permission")
-    reason: Optional[str] = Field(None, description="Reason if permission denied")
+    reason: str | None = Field(None, description="Reason if permission denied")
 
 
 class UserPermissionsResponse(BaseModel):
     """Schema for user permissions response."""
     user_id: UUID
     tenant_id: UUID
-    roles: List[Role]
-    permissions: List[str]
-    resource_permissions: List[ResourcePermissionResponse]
+    roles: list[Role]
+    permissions: list[str]
+    resource_permissions: list[ResourcePermissionResponse]
 
     class Config:
         from_attributes = True

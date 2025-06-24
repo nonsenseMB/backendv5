@@ -1,6 +1,5 @@
 """Redis client for caching and session management."""
 import json
-from typing import Any, Optional
 
 import redis.asyncio as redis
 from redis.asyncio import ConnectionPool
@@ -16,8 +15,8 @@ class RedisClient:
 
     def __init__(self, redis_url: str = None):
         self.redis_url = redis_url or settings.REDIS_URL
-        self._pool: Optional[ConnectionPool] = None
-        self._client: Optional[redis.Redis] = None
+        self._pool: ConnectionPool | None = None
+        self._client: redis.Redis | None = None
 
     async def connect(self) -> None:
         """Initialize Redis connection pool."""
@@ -28,7 +27,7 @@ class RedisClient:
                 max_connections=settings.REDIS_POOL_SIZE
             )
             self._client = redis.Redis(connection_pool=self._pool)
-            
+
             # Test connection
             await self._client.ping()
             logger.info("Redis connection established", url=self.redis_url)
@@ -50,7 +49,7 @@ class RedisClient:
             raise RuntimeError("Redis client not connected. Call connect() first.")
         return self._client
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value by key."""
         return await self.client.get(key)
 
@@ -58,7 +57,7 @@ class RedisClient:
         self,
         key: str,
         value: str,
-        expire: Optional[int] = None
+        expire: int | None = None
     ) -> bool:
         """Set key-value pair with optional expiration (in seconds)."""
         return await self.client.set(key, value, ex=expire)
@@ -80,7 +79,7 @@ class RedisClient:
         return await self.client.ttl(key)
 
     # JSON helpers
-    async def get_json(self, key: str) -> Optional[dict]:
+    async def get_json(self, key: str) -> dict | None:
         """Get JSON value by key."""
         value = await self.get(key)
         if value:
@@ -94,7 +93,7 @@ class RedisClient:
         self,
         key: str,
         value: dict,
-        expire: Optional[int] = None
+        expire: int | None = None
     ) -> bool:
         """Set JSON value with optional expiration."""
         json_str = json.dumps(value)
@@ -114,7 +113,7 @@ class RedisClient:
 
 
 # Singleton instance
-_redis_client: Optional[RedisClient] = None
+_redis_client: RedisClient | None = None
 
 
 async def get_redis_client() -> RedisClient:

@@ -1,5 +1,4 @@
 """Tenant-aware database utilities that integrate with tenant context."""
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,7 @@ logger = get_logger(__name__)
 
 async def get_tenant_aware_unit_of_work(
     session: AsyncSession,
-    tenant_id: Optional[UUID | str] = None
+    tenant_id: UUID | str | None = None
 ) -> UnitOfWork:
     """Create a UnitOfWork instance with tenant context.
     
@@ -49,7 +48,7 @@ async def get_tenant_aware_unit_of_work(
         # Convert to UUID if string
         if isinstance(tenant_id, str):
             tenant_id = UUID(tenant_id)
-    
+
     return UnitOfWork(session, tenant_id)
 
 
@@ -59,10 +58,10 @@ class TenantAwareRepositoryMixin:
     This mixin can be added to repository classes to automatically
     filter queries by the current tenant context.
     """
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # Check if this is a tenant-aware repository
         if hasattr(self, 'tenant_id') and self.tenant_id is None:
             # Try to get tenant from context

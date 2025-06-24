@@ -1,6 +1,6 @@
 """Enhanced device trust management system."""
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from src.core.auth.device_trust import (
@@ -8,10 +8,8 @@ from src.core.auth.device_trust import (
     calculate_trust_score,
     get_trust_level_name,
     is_high_trust_device,
-    is_low_trust_device,
     is_medium_trust_device,
 )
-from src.core.config import settings
 from src.core.logging import get_logger
 from src.core.logging.audit import AuditEventType, AuditSeverity, log_audit_event
 
@@ -20,16 +18,16 @@ logger = get_logger(__name__)
 
 class DeviceTrustManager:
     """Manages device trust scoring, policies, and analytics."""
-    
+
     # Trust decay configuration
     TRUST_DECAY_RATE = 1  # Points lost per week of inactivity
     MIN_TRUST_SCORE = 10  # Minimum trust score
     MAX_TRUST_SCORE = 100  # Maximum trust score
-    
+
     # Trust thresholds for policies
     HIGH_TRUST_THRESHOLD = 80
     MEDIUM_TRUST_THRESHOLD = 50
-    
+
     # Policy configuration
     POLICIES = {
         "high_trust": {
@@ -57,20 +55,20 @@ class DeviceTrustManager:
             "max_concurrent_sessions": 1,
         }
     }
-    
+
     def __init__(self):
         """Initialize trust manager."""
         self.analytics_cache = {}
-    
+
     def calculate_initial_trust_score(
         self,
-        attestation_type: Optional[str] = None,
-        authenticator_attachment: Optional[str] = None,
-        aaguid: Optional[UUID] = None,
+        attestation_type: str | None = None,
+        authenticator_attachment: str | None = None,
+        aaguid: UUID | None = None,
         user_verification: bool = True,
         is_resident_key: bool = False,
-        attestation_data: Optional[Dict] = None
-    ) -> Tuple[int, Dict[str, Any]]:
+        attestation_data: dict | None = None
+    ) -> tuple[int, dict[str, Any]]:
         """
         Calculate initial trust score with detailed breakdown.
         
@@ -86,7 +84,7 @@ class DeviceTrustManager:
             "resident_key_bonus": 0,
             "additional_factors": 0
         }
-        
+
         # Use existing calculation
         base_score = calculate_trust_score(
             attestation_type=attestation_type,
@@ -95,21 +93,21 @@ class DeviceTrustManager:
             user_verification=user_verification,
             is_resident_key=is_resident_key
         )
-        
+
         # Enhanced scoring with attestation data
         if attestation_data:
             # Check for enterprise attestation
             if attestation_data.get("is_enterprise"):
                 breakdown["additional_factors"] += 10
-            
+
             # Check for hardware backing
             if attestation_data.get("has_hardware_backing"):
                 breakdown["additional_factors"] += 5
-            
+
             # Check for secure element
             if attestation_data.get("has_secure_element"):
                 breakdown["additional_factors"] += 5
-        
+
         # Fill in breakdown
         if attestation_type:
             if attestation_type == "enterprise":
@@ -120,37 +118,37 @@ class DeviceTrustManager:
                 breakdown["attestation_bonus"] = 20
             elif attestation_type == "none":
                 breakdown["attestation_bonus"] = 5
-        
+
         if authenticator_attachment == "platform":
             breakdown["authenticator_bonus"] = 20
         elif authenticator_attachment == "cross-platform":
             breakdown["authenticator_bonus"] = 10
-        
+
         if aaguid and str(aaguid).lower() in TRUSTED_AAGUIDS:
             breakdown["known_device_bonus"] = TRUSTED_AAGUIDS[str(aaguid).lower()]["trust_bonus"]
-        
+
         if user_verification:
             breakdown["verification_bonus"] = 10
-        
+
         if is_resident_key:
             breakdown["resident_key_bonus"] = 5
-        
+
         # Calculate final score with additional factors
         final_score = min(base_score + breakdown["additional_factors"], self.MAX_TRUST_SCORE)
-        
+
         logger.info(
             "Calculated initial trust score",
             final_score=final_score,
             breakdown=breakdown
         )
-        
+
         return final_score, breakdown
-    
+
     def calculate_trust_decay(
         self,
         current_score: int,
         last_used: datetime,
-        current_time: Optional[datetime] = None
+        current_time: datetime | None = None
     ) -> int:
         """
         Calculate trust score decay based on inactivity.
@@ -165,15 +163,15 @@ class DeviceTrustManager:
         """
         if current_time is None:
             current_time = datetime.utcnow()
-        
+
         # Calculate weeks of inactivity
         time_diff = current_time - last_used
         weeks_inactive = time_diff.days // 7
-        
+
         # Apply decay
         decay = weeks_inactive * self.TRUST_DECAY_RATE
         new_score = max(current_score - decay, self.MIN_TRUST_SCORE)
-        
+
         if decay > 0:
             logger.info(
                 "Applied trust decay",
@@ -182,14 +180,14 @@ class DeviceTrustManager:
                 weeks_inactive=weeks_inactive,
                 decay_amount=decay
             )
-        
+
         return new_score
-    
+
     def adjust_trust_for_behavior(
         self,
         current_score: int,
-        device_analytics: Dict[str, Any]
-    ) -> Tuple[int, List[str]]:
+        device_analytics: dict[str, Any]
+    ) -> tuple[int, list[str]]:
         """
         Adjust trust score based on device behavior.
         
@@ -202,7 +200,7 @@ class DeviceTrustManager:
         """
         adjusted_score = current_score
         reasons = []
-        
+
         # Positive adjustments
         if device_analytics.get("successful_auth_streak", 0) >= 50:
             adjusted_score += 10
@@ -210,34 +208,34 @@ class DeviceTrustManager:
         elif device_analytics.get("successful_auth_streak", 0) >= 20:
             adjusted_score += 5
             reasons.append("Good authentication streak (+5)")
-        
+
         # Regular usage bonus
         if device_analytics.get("days_active_last_month", 0) >= 20:
             adjusted_score += 5
             reasons.append("Regular daily usage (+5)")
-        
+
         # Location consistency bonus
         if device_analytics.get("location_consistency", 0) >= 0.9:
             adjusted_score += 3
             reasons.append("Consistent location usage (+3)")
-        
+
         # Negative adjustments
         if device_analytics.get("failed_auth_attempts", 0) > 5:
             adjusted_score -= 10
             reasons.append("Multiple failed authentications (-10)")
-        
+
         if device_analytics.get("suspicious_activity_count", 0) > 0:
             adjusted_score -= 20
             reasons.append("Suspicious activity detected (-20)")
-        
+
         # Time-based patterns
         if device_analytics.get("unusual_time_access", 0) > 3:
             adjusted_score -= 5
             reasons.append("Unusual access times (-5)")
-        
+
         # Ensure within bounds
         final_score = max(self.MIN_TRUST_SCORE, min(adjusted_score, self.MAX_TRUST_SCORE))
-        
+
         if final_score != current_score:
             logger.info(
                 "Adjusted trust score for behavior",
@@ -245,10 +243,10 @@ class DeviceTrustManager:
                 final_score=final_score,
                 reasons=reasons
             )
-        
+
         return final_score, reasons
-    
-    def get_device_policy(self, trust_score: int) -> Dict[str, Any]:
+
+    def get_device_policy(self, trust_score: int) -> dict[str, Any]:
         """
         Get security policy based on device trust score.
         
@@ -267,24 +265,24 @@ class DeviceTrustManager:
         else:
             policy = self.POLICIES["low_trust"].copy()
             policy["trust_level"] = "low"
-        
+
         policy["trust_score"] = trust_score
         policy["trust_level_name"] = get_trust_level_name(trust_score)
-        
+
         # Apply additional restrictions for very low trust
         if trust_score < 30:
             policy["session_timeout_minutes"] = 15
             policy["require_continuous_verification"] = True
-        
+
         return policy
-    
+
     def should_trigger_trust_review(
         self,
         device_id: UUID,
         trust_score: int,
-        last_review: Optional[datetime] = None,
-        analytics: Optional[Dict] = None
-    ) -> Tuple[bool, List[str]]:
+        last_review: datetime | None = None,
+        analytics: dict | None = None
+    ) -> tuple[bool, list[str]]:
         """
         Determine if device trust should be reviewed.
         
@@ -298,7 +296,7 @@ class DeviceTrustManager:
             Tuple of (should_review, reasons)
         """
         reasons = []
-        
+
         # Time-based review
         if last_review:
             days_since_review = (datetime.utcnow() - last_review).days
@@ -308,24 +306,24 @@ class DeviceTrustManager:
                 reasons.append("Monthly review for low trust device")
         else:
             reasons.append("No previous review")
-        
+
         # Analytics-based triggers
         if analytics:
             if analytics.get("failed_auth_attempts", 0) > 3:
                 reasons.append("Multiple failed authentication attempts")
-            
+
             if analytics.get("location_changes", 0) > 5:
                 reasons.append("Frequent location changes")
-            
+
             if analytics.get("unusual_activity_score", 0) > 0.7:
                 reasons.append("Unusual activity detected")
-        
+
         # Trust score triggers
         if trust_score < 30:
             reasons.append("Very low trust score")
-        
+
         should_review = len(reasons) > 0
-        
+
         if should_review:
             logger.info(
                 "Trust review triggered",
@@ -333,15 +331,15 @@ class DeviceTrustManager:
                 trust_score=trust_score,
                 reasons=reasons
             )
-        
+
         return should_review, reasons
-    
+
     def record_device_event(
         self,
         device_id: UUID,
         event_type: str,
         success: bool,
-        metadata: Optional[Dict] = None
+        metadata: dict | None = None
     ):
         """
         Record device event for analytics.
@@ -363,9 +361,9 @@ class DeviceTrustManager:
                 "access_times": [],
                 "suspicious_events": []
             }
-        
+
         analytics = self.analytics_cache[str(device_id)]
-        
+
         # Update based on event type
         if event_type == "authentication":
             if success:
@@ -375,21 +373,21 @@ class DeviceTrustManager:
                 analytics["failed_auth_count"] += 1
                 analytics["successful_auth_streak"] = 0
             analytics["last_auth_time"] = datetime.utcnow()
-        
+
         elif event_type == "location_change":
             if metadata and "location" in metadata:
                 analytics["location_history"].append({
                     "location": metadata["location"],
                     "timestamp": datetime.utcnow()
                 })
-        
+
         elif event_type == "suspicious_activity":
             analytics["suspicious_events"].append({
                 "type": metadata.get("activity_type", "unknown"),
                 "timestamp": datetime.utcnow(),
                 "details": metadata
             })
-        
+
         # Log significant events
         if event_type == "suspicious_activity":
             log_audit_event(
@@ -401,8 +399,8 @@ class DeviceTrustManager:
                     "metadata": metadata
                 }
             )
-    
-    def get_device_analytics(self, device_id: UUID) -> Dict[str, Any]:
+
+    def get_device_analytics(self, device_id: UUID) -> dict[str, Any]:
         """
         Get analytics for a device.
         
@@ -419,17 +417,17 @@ class DeviceTrustManager:
                 "successful_auth_streak": 0,
                 "has_analytics": False
             }
-        
+
         analytics = self.analytics_cache[str(device_id)].copy()
         analytics["has_analytics"] = True
-        
+
         # Calculate derived metrics
         total_auth = analytics["successful_auth_count"] + analytics["failed_auth_count"]
         if total_auth > 0:
             analytics["success_rate"] = analytics["successful_auth_count"] / total_auth
         else:
             analytics["success_rate"] = 0
-        
+
         # Location consistency
         if len(analytics.get("location_history", [])) > 1:
             locations = [loc["location"] for loc in analytics["location_history"]]
@@ -437,15 +435,15 @@ class DeviceTrustManager:
             analytics["location_consistency"] = locations.count(most_common) / len(locations)
         else:
             analytics["location_consistency"] = 1.0
-        
+
         return analytics
-    
+
     def generate_trust_report(
         self,
         device_id: UUID,
         trust_score: int,
-        device_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        device_info: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Generate comprehensive trust report for a device.
         
@@ -459,7 +457,7 @@ class DeviceTrustManager:
         """
         analytics = self.get_device_analytics(device_id)
         policy = self.get_device_policy(trust_score)
-        
+
         report = {
             "device_id": str(device_id),
             "timestamp": datetime.utcnow().isoformat(),
@@ -470,30 +468,30 @@ class DeviceTrustManager:
             "applied_policy": policy,
             "recommendations": []
         }
-        
+
         # Add recommendations
         if trust_score < 50:
             report["recommendations"].append(
                 "Consider re-authenticating with stronger attestation"
             )
-        
+
         if analytics.get("failed_auth_count", 0) > 3:
             report["recommendations"].append(
                 "Review failed authentication attempts"
             )
-        
+
         if analytics.get("location_consistency", 1.0) < 0.5:
             report["recommendations"].append(
                 "Device is being used from multiple locations"
             )
-        
+
         logger.info(
             "Generated trust report",
             device_id=str(device_id),
             trust_score=trust_score,
             trust_level=policy["trust_level_name"]
         )
-        
+
         return report
 
 

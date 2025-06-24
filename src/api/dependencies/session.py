@@ -2,7 +2,6 @@
 Session management dependencies for FastAPI endpoints.
 Provides session extraction and validation.
 """
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -34,7 +33,7 @@ async def get_current_session_id(request: Request) -> UUID:
             detail="No session found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     try:
         return UUID(request.state.session_id)
     except (ValueError, TypeError) as e:
@@ -63,10 +62,10 @@ async def get_current_session(
         HTTPException: If session is not found or invalid
     """
     session_id = await get_current_session_id(request)
-    
+
     # Get session from service
     session_info = await session_service.get_session(session_id)
-    
+
     if not session_info:
         logger.error("Session not found", session_id=str(session_id))
         raise HTTPException(
@@ -74,7 +73,7 @@ async def get_current_session(
             detail="Session not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Validate session is still active
     is_valid = await session_service.validate_session(session_id)
     if not is_valid:
@@ -84,21 +83,21 @@ async def get_current_session(
             detail="Session expired or invalid",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     logger.debug(
         "Session retrieved via dependency",
         session_id=str(session_id),
         user_id=str(session_info.user_id),
         tenant_id=str(session_info.tenant_id)
     )
-    
+
     return session_info
 
 
 async def get_optional_session(
     request: Request,
     session_service: SessionService = Depends(get_redis_session_service),
-) -> Optional[SessionInfo]:
+) -> SessionInfo | None:
     """
     Get the current session if available, otherwise return None.
     Useful for endpoints that support both authenticated and anonymous access.
@@ -112,22 +111,22 @@ async def get_optional_session(
     """
     if not hasattr(request.state, "session_id") or not request.state.session_id:
         return None
-    
+
     try:
         session_id = UUID(request.state.session_id)
     except (ValueError, TypeError):
         logger.warning("Invalid session_id format in optional session", session_id=request.state.session_id)
         return None
-    
+
     # Get session from service
     session_info = await session_service.get_session(session_id)
-    
+
     if session_info:
         # Validate session
         is_valid = await session_service.validate_session(session_id)
         if is_valid:
             return session_info
-    
+
     return None
 
 
@@ -187,7 +186,7 @@ async def invalidate_current_session(
         bool: True if session was invalidated
     """
     success = await session_service.invalidate_session(session_info.session_id)
-    
+
     if success:
         logger.info(
             "Session invalidated via dependency",
@@ -199,7 +198,7 @@ async def invalidate_current_session(
             "Failed to invalidate session",
             session_id=str(session_info.session_id)
         )
-    
+
     return success
 
 

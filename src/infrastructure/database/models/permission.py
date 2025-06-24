@@ -3,10 +3,9 @@ Permission and Authorization models for role-based and resource-based access con
 Implements tenant-scoped permission system as defined in task-130.
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy import JSON
 
 from ..base import BaseModel, TenantAwareModel
 

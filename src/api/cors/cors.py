@@ -3,20 +3,18 @@ CORS configuration for multi-tenant support.
 Provides tenant-aware CORS origin validation and configuration.
 """
 import re
-from typing import List, Optional, Set
 from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import get_logger
-from src.infrastructure.database.models.tenant import Tenant
 from src.infrastructure.database.session import get_async_session
 from src.infrastructure.database.unit_of_work import UnitOfWork
 
 logger = get_logger(__name__)
 
 # Cache for tenant CORS origins to avoid database queries on every request
-_tenant_cors_cache: dict[str, Set[str]] = {}
+_tenant_cors_cache: dict[str, set[str]] = {}
 _cache_ttl_seconds = 300  # 5 minutes
 
 
@@ -24,17 +22,17 @@ class CORSConfig:
     """
     CORS configuration manager with tenant-aware origin validation.
     """
-    
+
     def __init__(self):
         # Import settings here to avoid circular import
         from src.core.config import settings
-        
+
         # Global allowed origins from settings
-        self.global_origins: Set[str] = set(settings.CORS_ORIGINS)
-        
+        self.global_origins: set[str] = set(settings.CORS_ORIGINS)
+
         # Wildcard patterns for dynamic origin matching
-        self.wildcard_patterns: List[re.Pattern] = []
-        
+        self.wildcard_patterns: list[re.Pattern] = []
+
         # Parse wildcard origins
         for origin in self.global_origins:
             if "*" in origin:
@@ -43,7 +41,7 @@ class CORSConfig:
                 pattern = pattern.replace("*", r"[^.]+")
                 pattern = f"^{pattern}$"
                 self.wildcard_patterns.append(re.compile(pattern))
-        
+
         # Development mode allows localhost with any port
         if settings.DEBUG:
             self.wildcard_patterns.append(
@@ -52,7 +50,7 @@ class CORSConfig:
             self.wildcard_patterns.append(
                 re.compile(r"^https?://127\.0\.0\.1(:\d+)?$")
             )
-    
+
     def is_origin_allowed_globally(self, origin: str) -> bool:
         """
         Check if origin is allowed globally (not tenant-specific).
@@ -66,19 +64,19 @@ class CORSConfig:
         # Check exact match
         if origin in self.global_origins:
             return True
-        
+
         # Check wildcard patterns
         for pattern in self.wildcard_patterns:
             if pattern.match(origin):
                 return True
-        
+
         return False
-    
+
     async def get_tenant_allowed_origins(
         self,
         tenant_id: str,
-        session: Optional[AsyncSession] = None
-    ) -> Set[str]:
+        session: AsyncSession | None = None
+    ) -> set[str]:
         """
         Get allowed origins for a specific tenant.
         
@@ -92,7 +90,7 @@ class CORSConfig:
         # Check cache first
         if tenant_id in _tenant_cors_cache:
             return _tenant_cors_cache[tenant_id]
-        
+
         # Fetch from database
         try:
             if session is None:
@@ -107,12 +105,12 @@ class CORSConfig:
                 error=str(e)
             )
             return set()
-    
+
     async def _fetch_tenant_origins(
         self,
         tenant_id: str,
         session: AsyncSession
-    ) -> Set[str]:
+    ) -> set[str]:
         """
         Fetch tenant origins from database.
         
@@ -125,46 +123,46 @@ class CORSConfig:
         """
         uow = UnitOfWork(session)
         tenant = await uow.tenants.get_by_id(tenant_id)
-        
+
         if not tenant or not tenant.is_active:
             return set()
-        
+
         # Get CORS origins from tenant settings
         tenant_origins = set()
-        
+
         # Check tenant settings for cors_origins
         if tenant.settings and isinstance(tenant.settings, dict):
             cors_origins = tenant.settings.get("cors_origins", [])
             if isinstance(cors_origins, list):
                 tenant_origins.update(cors_origins)
-        
+
         # Add tenant's custom domain if configured
         if tenant.domain:
             # Add both http and https versions
             tenant_origins.add(f"https://{tenant.domain}")
             if settings.DEBUG:
                 tenant_origins.add(f"http://{tenant.domain}")
-        
+
         # Cache the result
         _tenant_cors_cache[tenant_id] = tenant_origins
-        
+
         # Schedule cache cleanup
         # In production, use a proper cache with TTL
         import asyncio
         asyncio.create_task(self._clear_cache_entry(tenant_id))
-        
+
         return tenant_origins
-    
+
     async def _clear_cache_entry(self, tenant_id: str):
         """Clear cache entry after TTL."""
         await asyncio.sleep(_cache_ttl_seconds)
         _tenant_cors_cache.pop(tenant_id, None)
-    
+
     async def is_origin_allowed_for_tenant(
         self,
         origin: str,
         tenant_id: str,
-        session: Optional[AsyncSession] = None
+        session: AsyncSession | None = None
     ) -> bool:
         """
         Check if origin is allowed for a specific tenant.
@@ -180,11 +178,11 @@ class CORSConfig:
         # Check global origins first
         if self.is_origin_allowed_globally(origin):
             return True
-        
+
         # Check tenant-specific origins
         tenant_origins = await self.get_tenant_allowed_origins(tenant_id, session)
         return origin in tenant_origins
-    
+
     def validate_origin(self, origin: str) -> bool:
         """
         Validate that an origin is well-formed.
@@ -201,7 +199,7 @@ class CORSConfig:
             return bool(parsed.scheme and parsed.netloc and not parsed.path)
         except Exception:
             return False
-    
+
     def get_cors_headers(
         self,
         origin: str,
@@ -220,22 +218,22 @@ class CORSConfig:
             Dictionary of CORS headers
         """
         from src.core.config import settings
-        
+
         headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": ", ".join(settings.CORS_ALLOW_METHODS),
             "Access-Control-Allow-Headers": ", ".join(settings.CORS_ALLOW_HEADERS),
             "Access-Control-Max-Age": str(max_age),
         }
-        
+
         if credentials:
             headers["Access-Control-Allow-Credentials"] = "true"
-        
+
         # Add exposed headers if configured
         exposed_headers = getattr(settings, "CORS_EXPOSE_HEADERS", [])
         if exposed_headers:
             headers["Access-Control-Expose-Headers"] = ", ".join(exposed_headers)
-        
+
         return headers
 
 
@@ -243,7 +241,7 @@ class CORSConfig:
 cors_config = CORSConfig()
 
 
-async def get_allowed_origins(request_origin: str, tenant_id: Optional[str] = None) -> Optional[str]:
+async def get_allowed_origins(request_origin: str, tenant_id: str | None = None) -> str | None:
     """
     FastAPI CORS middleware callback to determine allowed origins.
     
@@ -261,12 +259,12 @@ async def get_allowed_origins(request_origin: str, tenant_id: Optional[str] = No
     if not cors_config.validate_origin(request_origin):
         logger.debug("Invalid origin format", origin=request_origin)
         return None
-    
+
     # Check global origins
     if cors_config.is_origin_allowed_globally(request_origin):
         logger.debug("Origin allowed globally", origin=request_origin)
         return request_origin
-    
+
     # Check tenant-specific origins if tenant_id provided
     if tenant_id:
         try:
@@ -284,12 +282,12 @@ async def get_allowed_origins(request_origin: str, tenant_id: Optional[str] = No
                 tenant_id=tenant_id,
                 error=str(e)
             )
-    
+
     logger.debug("Origin not allowed", origin=request_origin)
     return None
 
 
-def clear_tenant_cors_cache(tenant_id: Optional[str] = None):
+def clear_tenant_cors_cache(tenant_id: str | None = None):
     """
     Clear CORS cache for a tenant or all tenants.
     

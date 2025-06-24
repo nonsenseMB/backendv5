@@ -211,7 +211,7 @@ class TenantAwareRepository(BaseRepository[ModelType]):
 
     def __init__(self, model: type[ModelType], session: AsyncSession, tenant_id: UUID | None = None):
         super().__init__(model, session)
-        
+
         # If no tenant_id provided, try to get from context
         if tenant_id is None:
             from src.core.context import get_tenant_context

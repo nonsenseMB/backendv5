@@ -47,28 +47,28 @@ class JWTManager:
                 raise ValueError(
                     "JWT_PRIVATE_KEY_PATH and JWT_PUBLIC_KEY_PATH must be set for RSA algorithms"
                 )
-            
+
             # Load private key for signing
             from pathlib import Path
             private_key_path = Path(settings.JWT_PRIVATE_KEY_PATH)
             if not private_key_path.exists():
                 raise FileNotFoundError(f"Private key not found: {private_key_path}")
-            
+
             with open(private_key_path, "rb") as f:
                 self.private_key = f.read()
-            
+
             # Load public key for verification (optional, but good to validate)
             public_key_path = Path(settings.JWT_PUBLIC_KEY_PATH)
             if not public_key_path.exists():
                 raise FileNotFoundError(f"Public key not found: {public_key_path}")
-            
+
             with open(public_key_path, "rb") as f:
                 self.public_key = f.read()
-            
+
             # For RSA, we use private key for encoding
             self.secret_key = self.private_key
-            
-            logger.info("RSA keys loaded", 
+
+            logger.info("RSA keys loaded",
                        algorithm=self.algorithm,
                        private_key_path=str(private_key_path),
                        public_key_path=str(public_key_path))

@@ -1,6 +1,5 @@
 """Schemas for authentication and device registration."""
 from datetime import datetime
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, validator
@@ -8,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, validator
 
 class DeviceRegistrationOptions(BaseModel):
     """Options for initiating device registration."""
-    
+
     challenge: str = Field(description="Base64 encoded challenge for registration")
     rp_id: str = Field(description="Relying party identifier (domain)")
     rp_name: str = Field(description="Relying party display name")
@@ -16,13 +15,13 @@ class DeviceRegistrationOptions(BaseModel):
     user_name: str = Field(description="Username for the credential")
     user_display_name: str = Field(description="Display name for the credential")
     attestation: str = Field(default="direct", description="Attestation conveyance preference")
-    authenticator_selection: Dict = Field(description="Authenticator selection criteria")
+    authenticator_selection: dict = Field(description="Authenticator selection criteria")
     timeout: int = Field(default=60000, description="Timeout in milliseconds")
-    exclude_credentials: List[Dict] = Field(
+    exclude_credentials: list[dict] = Field(
         default_factory=list,
         description="List of credentials to exclude (already registered)"
     )
-    pubkey_cred_params: List[Dict] = Field(
+    pubkey_cred_params: list[dict] = Field(
         default_factory=lambda: [
             {"type": "public-key", "alg": -7},   # ES256
             {"type": "public-key", "alg": -257}, # RS256
@@ -48,9 +47,9 @@ class DeviceRegistrationOptions(BaseModel):
 
 class AuthenticatorResponse(BaseModel):
     """Base authenticator response data."""
-    
+
     client_data_json: str = Field(description="Base64 encoded client data JSON")
-    
+
     @validator("client_data_json")
     def validate_client_data(cls, v):
         """Ensure client data is not empty."""
@@ -61,23 +60,23 @@ class AuthenticatorResponse(BaseModel):
 
 class RegistrationResponse(AuthenticatorResponse):
     """Registration response from authenticator."""
-    
+
     attestation_object: str = Field(description="Base64 encoded attestation object")
-    authenticator_data: Optional[str] = Field(None, description="Base64 encoded authenticator data")
-    public_key: Optional[str] = Field(None, description="Base64 encoded public key (for some flows)")
-    public_key_algorithm: Optional[int] = Field(None, description="Public key algorithm used")
-    transports: Optional[List[str]] = Field(None, description="Supported transports")
+    authenticator_data: str | None = Field(None, description="Base64 encoded authenticator data")
+    public_key: str | None = Field(None, description="Base64 encoded public key (for some flows)")
+    public_key_algorithm: int | None = Field(None, description="Public key algorithm used")
+    transports: list[str] | None = Field(None, description="Supported transports")
 
 
 class DeviceRegistrationVerification(BaseModel):
     """Device registration verification request."""
-    
+
     id: str = Field(description="Base64 encoded credential ID")
     raw_id: str = Field(description="Base64 encoded raw credential ID")
     response: RegistrationResponse = Field(description="Registration response data")
     type: str = Field(default="public-key", description="Credential type")
-    authenticator_attachment: Optional[str] = Field(None, description="Authenticator attachment type")
-    client_extension_results: Optional[Dict] = Field(default_factory=dict, description="Client extension results")
+    authenticator_attachment: str | None = Field(None, description="Authenticator attachment type")
+    client_extension_results: dict | None = Field(default_factory=dict, description="Client extension results")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -94,12 +93,12 @@ class DeviceRegistrationVerification(BaseModel):
 
 class AuthenticationOptions(BaseModel):
     """Options for initiating authentication."""
-    
+
     challenge: str = Field(description="Base64 encoded challenge for authentication")
     timeout: int = Field(default=60000, description="Timeout in milliseconds")
     rp_id: str = Field(description="Relying party identifier")
     user_verification: str = Field(default="required", description="User verification requirement")
-    allow_credentials: List[Dict] = Field(
+    allow_credentials: list[dict] = Field(
         default_factory=list,
         description="List of allowed credentials for authentication"
     )
@@ -118,20 +117,20 @@ class AuthenticationOptions(BaseModel):
 
 class AuthenticationResponse(AuthenticatorResponse):
     """Authentication response from authenticator."""
-    
+
     authenticator_data: str = Field(description="Base64 encoded authenticator data")
     signature: str = Field(description="Base64 encoded signature")
-    user_handle: Optional[str] = Field(None, description="Base64 encoded user handle")
+    user_handle: str | None = Field(None, description="Base64 encoded user handle")
 
 
 class DeviceAuthenticationVerification(BaseModel):
     """Device authentication verification request."""
-    
+
     id: str = Field(description="Base64 encoded credential ID")
     raw_id: str = Field(description="Base64 encoded raw credential ID")
     response: AuthenticationResponse = Field(description="Authentication response data")
     type: str = Field(default="public-key", description="Credential type")
-    client_extension_results: Optional[Dict] = Field(default_factory=dict, description="Client extension results")
+    client_extension_results: dict | None = Field(default_factory=dict, description="Client extension results")
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -149,7 +148,7 @@ class DeviceAuthenticationVerification(BaseModel):
 
 class DeviceInfo(BaseModel):
     """Device information for user device management."""
-    
+
     id: UUID = Field(description="Device unique identifier")
     name: str = Field(description="User-friendly device name")
     type: str = Field(description="Device type (webauthn, passkey, device_cert)")
@@ -157,10 +156,10 @@ class DeviceInfo(BaseModel):
     last_used: datetime = Field(description="Last authentication timestamp")
     created_at: datetime = Field(description="Device registration timestamp")
     is_current: bool = Field(description="Whether this is the currently used device")
-    platform: Optional[str] = Field(None, description="Platform information")
-    browser: Optional[str] = Field(None, description="Browser information")
-    aaguid: Optional[UUID] = Field(None, description="Authenticator AAGUID")
-    attestation_type: Optional[str] = Field(None, description="Attestation type used")
+    platform: str | None = Field(None, description="Platform information")
+    browser: str | None = Field(None, description="Browser information")
+    aaguid: UUID | None = Field(None, description="Authenticator AAGUID")
+    attestation_type: str | None = Field(None, description="Attestation type used")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -182,10 +181,10 @@ class DeviceInfo(BaseModel):
 
 class DeviceListResponse(BaseModel):
     """Response for device list endpoint."""
-    
-    devices: List[DeviceInfo] = Field(description="List of user devices")
+
+    devices: list[DeviceInfo] = Field(description="List of user devices")
     total: int = Field(description="Total number of devices")
-    
+
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "devices": [{
@@ -204,9 +203,9 @@ class DeviceListResponse(BaseModel):
 
 class DeviceUpdateRequest(BaseModel):
     """Request to update device information."""
-    
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="New device name")
-    
+
+    name: str | None = Field(None, min_length=1, max_length=100, description="New device name")
+
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "name": "Personal MacBook Pro"
@@ -216,12 +215,12 @@ class DeviceUpdateRequest(BaseModel):
 
 class DeviceRegistrationSuccess(BaseModel):
     """Successful device registration response."""
-    
+
     device_id: UUID = Field(description="Newly registered device ID")
     device_name: str = Field(description="Device name")
     trust_level: int = Field(description="Initial trust score")
     message: str = Field(default="Device registered successfully")
-    
+
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "device_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -234,13 +233,13 @@ class DeviceRegistrationSuccess(BaseModel):
 
 class DeviceAuthenticationSuccess(BaseModel):
     """Successful device authentication response."""
-    
+
     access_token: str = Field(description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
     expires_in: int = Field(description="Token expiration in seconds")
-    refresh_token: Optional[str] = Field(None, description="Refresh token if enabled")
+    refresh_token: str | None = Field(None, description="Refresh token if enabled")
     device_id: UUID = Field(description="Authenticated device ID")
-    
+
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "access_token": "eyJhbGciOiJIUzI1NiIs...",

@@ -1,35 +1,34 @@
 """Repository for device certificate management."""
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from src.core.logging import get_logger
 from src.infrastructure.database.models.auth import DeviceCertificate
 from src.infrastructure.database.repositories.base import BaseRepository
-from src.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class CertificateRepository(BaseRepository[DeviceCertificate]):
     """Repository for managing device certificates."""
-    
+
     def __init__(
         self,
         model: type[DeviceCertificate],
         session: AsyncSession,
-        tenant_id: Optional[UUID] = None
+        tenant_id: UUID | None = None
     ):
         """Initialize certificate repository."""
         super().__init__(model, session, tenant_id)
-    
+
     async def get_by_serial_number(
         self,
         serial_number: str
-    ) -> Optional[DeviceCertificate]:
+    ) -> DeviceCertificate | None:
         """
         Get certificate by serial number.
         
@@ -43,19 +42,19 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
             query = select(self.model).where(
                 self.model.serial_number == serial_number
             ).options(joinedload(self.model.device))
-            
+
             result = await self.session.execute(query)
             certificate = result.scalar_one_or_none()
-            
+
             if certificate:
                 logger.debug(
                     "Found certificate by serial",
                     serial_number=serial_number,
                     certificate_id=str(certificate.id)
                 )
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to get certificate by serial",
@@ -64,11 +63,11 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def get_by_fingerprint(
         self,
         fingerprint_sha256: str
-    ) -> Optional[DeviceCertificate]:
+    ) -> DeviceCertificate | None:
         """
         Get certificate by SHA256 fingerprint.
         
@@ -82,12 +81,12 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
             query = select(self.model).where(
                 self.model.fingerprint_sha256 == fingerprint_sha256.lower()
             ).options(joinedload(self.model.device))
-            
+
             result = await self.session.execute(query)
             certificate = result.scalar_one_or_none()
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to get certificate by fingerprint",
@@ -96,13 +95,13 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def get_device_certificates(
         self,
         device_id: UUID,
         active_only: bool = True,
         include_revoked: bool = False
-    ) -> List[DeviceCertificate]:
+    ) -> list[DeviceCertificate]:
         """
         Get all certificates for a device.
         
@@ -118,19 +117,19 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
             query = select(self.model).where(
                 self.model.device_id == device_id
             )
-            
+
             if active_only:
                 query = query.where(self.model.is_active == True)
-            
+
             if not include_revoked:
                 query = query.where(self.model.revoked == False)
-            
+
             # Order by creation date (newest first)
             query = query.order_by(self.model.created_at.desc())
-            
+
             result = await self.session.execute(query)
             certificates = result.scalars().all()
-            
+
             logger.debug(
                 "Retrieved device certificates",
                 device_id=str(device_id),
@@ -138,9 +137,9 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 active_only=active_only,
                 include_revoked=include_revoked
             )
-            
+
             return certificates
-            
+
         except Exception as e:
             logger.error(
                 "Failed to get device certificates",
@@ -149,11 +148,11 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def get_expiring_certificates(
         self,
         days_before_expiry: int = 30
-    ) -> List[DeviceCertificate]:
+    ) -> list[DeviceCertificate]:
         """
         Get certificates expiring within specified days.
         
@@ -166,7 +165,7 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
         try:
             from datetime import timedelta
             expiry_date = datetime.utcnow() + timedelta(days=days_before_expiry)
-            
+
             query = select(self.model).where(
                 and_(
                     self.model.not_after <= expiry_date,
@@ -175,18 +174,18 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                     self.model.revoked == False
                 )
             ).options(joinedload(self.model.device))
-            
+
             result = await self.session.execute(query)
             certificates = result.scalars().all()
-            
+
             logger.info(
                 "Found expiring certificates",
                 count=len(certificates),
                 days_before_expiry=days_before_expiry
             )
-            
+
             return certificates
-            
+
         except Exception as e:
             logger.error(
                 "Failed to get expiring certificates",
@@ -194,12 +193,12 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def revoke_certificate(
         self,
         certificate_id: UUID,
         reason: str = "unspecified",
-        revoked_by: Optional[UUID] = None
+        revoked_by: UUID | None = None
     ) -> DeviceCertificate:
         """
         Revoke a certificate.
@@ -220,7 +219,7 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 "is_active": False,
                 "updated_at": datetime.utcnow()
             })
-            
+
             logger.info(
                 "Certificate revoked",
                 certificate_id=str(certificate_id),
@@ -228,9 +227,9 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 reason=reason,
                 revoked_by=str(revoked_by) if revoked_by else None
             )
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to revoke certificate",
@@ -239,12 +238,12 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def update_ocsp_check(
         self,
         certificate_id: UUID,
         is_revoked: bool,
-        ocsp_response: Optional[dict] = None
+        ocsp_response: dict | None = None
     ) -> DeviceCertificate:
         """
         Update OCSP check results.
@@ -262,23 +261,23 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 "last_ocsp_check": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
-            
+
             if is_revoked:
                 update_data["revoked"] = True
                 update_data["is_active"] = False
                 if ocsp_response:
                     update_data["revocation_reason"] = ocsp_response.get("reason", "OCSP check")
-            
+
             certificate = await self.update(certificate_id, update_data)
-            
+
             logger.info(
                 "Updated OCSP check",
                 certificate_id=str(certificate_id),
                 is_revoked=is_revoked
             )
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to update OCSP check",
@@ -287,12 +286,12 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def update_crl_check(
         self,
         certificate_id: UUID,
         is_revoked: bool,
-        crl_response: Optional[dict] = None
+        crl_response: dict | None = None
     ) -> DeviceCertificate:
         """
         Update CRL check results.
@@ -310,23 +309,23 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 "last_crl_check": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
-            
+
             if is_revoked:
                 update_data["revoked"] = True
                 update_data["is_active"] = False
                 if crl_response:
                     update_data["revocation_reason"] = crl_response.get("reason", "CRL check")
-            
+
             certificate = await self.update(certificate_id, update_data)
-            
+
             logger.info(
                 "Updated CRL check",
                 certificate_id=str(certificate_id),
                 is_revoked=is_revoked
             )
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to update CRL check",
@@ -335,12 +334,12 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def approve_certificate(
         self,
         certificate_id: UUID,
         approved_by: UUID,
-        compliance_notes: Optional[str] = None
+        compliance_notes: str | None = None
     ) -> DeviceCertificate:
         """
         Approve a certificate for use.
@@ -361,15 +360,15 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 "compliance_notes": compliance_notes or f"Approved by {approved_by}",
                 "updated_at": datetime.utcnow()
             })
-            
+
             logger.info(
                 "Certificate approved",
                 certificate_id=str(certificate_id),
                 approved_by=str(approved_by)
             )
-            
+
             return certificate
-            
+
         except Exception as e:
             logger.error(
                 "Failed to approve certificate",
@@ -378,10 +377,10 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def count_active_certificates(
         self,
-        device_id: Optional[UUID] = None
+        device_id: UUID | None = None
     ) -> int:
         """
         Count active certificates.
@@ -400,15 +399,15 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                     self.model.not_after > datetime.utcnow()
                 )
             )
-            
+
             if device_id:
                 query = query.where(self.model.device_id == device_id)
-            
+
             result = await self.session.execute(query)
             count = result.scalar() or 0
-            
+
             return count
-            
+
         except Exception as e:
             logger.error(
                 "Failed to count active certificates",
@@ -417,7 +416,7 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                 exc_info=True
             )
             raise
-    
+
     async def cleanup_expired_certificates(
         self,
         days_after_expiry: int = 90
@@ -434,7 +433,7 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
         try:
             from datetime import timedelta
             cutoff_date = datetime.utcnow() - timedelta(days=days_after_expiry)
-            
+
             # Find expired certificates
             query = select(self.model).where(
                 and_(
@@ -442,10 +441,10 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                     self.model.is_active == True
                 )
             )
-            
+
             result = await self.session.execute(query)
             certificates = result.scalars().all()
-            
+
             # Deactivate each certificate
             deactivated_count = 0
             for cert in certificates:
@@ -454,15 +453,15 @@ class CertificateRepository(BaseRepository[DeviceCertificate]):
                     "updated_at": datetime.utcnow()
                 })
                 deactivated_count += 1
-            
+
             logger.info(
                 "Cleaned up expired certificates",
                 days_after_expiry=days_after_expiry,
                 deactivated_count=deactivated_count
             )
-            
+
             return deactivated_count
-            
+
         except Exception as e:
             logger.error(
                 "Failed to cleanup expired certificates",

@@ -2,8 +2,8 @@
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from src.core.logging import get_logger
 
@@ -24,30 +24,30 @@ class RequestContext:
     user_id: str
     tenant_id: str
     session_id: str
-    
+
     # Authorization data
-    permissions: List[str] = field(default_factory=list)
-    groups: List[str] = field(default_factory=list)
-    roles: List[str] = field(default_factory=list)
-    
+    permissions: list[str] = field(default_factory=list)
+    groups: list[str] = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
+
     # Request metadata
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    device_id: Optional[str] = None
-    api_version: Optional[str] = None
-    
+    ip_address: str | None = None
+    user_agent: str | None = None
+    device_id: str | None = None
+    api_version: str | None = None
+
     # Request details
-    method: Optional[str] = None
-    path: Optional[str] = None
-    query_params: Dict[str, Any] = field(default_factory=dict)
-    
+    method: str | None = None
+    path: str | None = None
+    query_params: dict[str, Any] = field(default_factory=dict)
+
     # Timing information
-    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
+
     # Additional context
-    extra: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert context to dictionary for logging."""
         return {
             "request_id": self.request_id,
@@ -69,12 +69,12 @@ class RequestContext:
 
 
 # Thread-safe context variable
-_request_context: ContextVar[Optional[RequestContext]] = ContextVar(
+_request_context: ContextVar[RequestContext | None] = ContextVar(
     "request_context", default=None
 )
 
 
-def get_request_context() -> Optional[RequestContext]:
+def get_request_context() -> RequestContext | None:
     """
     Get the current request context.
     
@@ -139,17 +139,17 @@ class RequestContextManager:
     This is useful for background tasks or when you need to temporarily
     switch request context.
     """
-    
+
     def __init__(self, context: RequestContext):
         self.context = context
-        self.previous_context: Optional[RequestContext] = None
-    
+        self.previous_context: RequestContext | None = None
+
     def __enter__(self):
         """Store previous context and set new one."""
         self.previous_context = get_request_context()
         set_request_context(self.context)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Restore previous context."""
         if self.previous_context:
@@ -169,14 +169,14 @@ def update_request_context(**kwargs) -> None:
         RuntimeError: If no request context is set
     """
     context = require_request_context()
-    
+
     for key, value in kwargs.items():
         if hasattr(context, key):
             setattr(context, key, value)
         else:
             # Store unknown fields in extra
             context.extra[key] = value
-    
+
     logger.debug(
         "Request context updated",
         request_id=context.request_id,

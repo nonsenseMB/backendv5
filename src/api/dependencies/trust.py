@@ -1,12 +1,10 @@
 """Trust-based policy dependencies for FastAPI endpoints."""
-from typing import Optional
-from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 
 from src.core.auth.trust_manager import trust_manager
 from src.core.logging import get_logger
-from src.infrastructure.database.models.auth import User, UserDevice
+from src.infrastructure.database.models.auth import User
 
 logger = get_logger(__name__)
 
@@ -27,20 +25,20 @@ def get_device_policy(request: Request) -> dict:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No device context found"
         )
-    
+
     # Get trust score from request state
     trust_score = getattr(request.state, "device_trust_score", 0)
-    
+
     # Get policy based on trust score
     policy = trust_manager.get_device_policy(trust_score)
-    
+
     logger.debug(
         "Retrieved device policy",
         device_id=request.state.device_id,
         trust_score=trust_score,
         trust_level=policy["trust_level"]
     )
-    
+
     return policy
 
 
@@ -67,7 +65,7 @@ def require_high_trust(policy: dict = Depends(get_device_policy)) -> dict:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This operation requires a high trust device"
         )
-    
+
     return policy
 
 
@@ -93,7 +91,7 @@ def require_medium_trust(policy: dict = Depends(get_device_policy)) -> dict:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This operation requires at least a medium trust device"
         )
-    
+
     return policy
 
 
@@ -117,7 +115,7 @@ def check_sensitive_operation_allowed(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sensitive operations not allowed with current device trust level"
         )
-    
+
     return True
 
 
@@ -141,7 +139,7 @@ def check_api_key_generation_allowed(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key generation requires a high trust device"
         )
-    
+
     return True
 
 
@@ -181,20 +179,20 @@ async def enforce_concurrent_session_limit(
         HTTPException: If session limit exceeded
     """
     max_sessions = policy.get("max_concurrent_sessions", 1)
-    
+
     # Get current session count from session service
     from src.infrastructure.auth.session_manager import get_session_manager
-    
+
     session_manager = await get_session_manager()
     active_sessions = await session_manager.get_user_sessions(str(user.id))
-    
+
     # Exclude current session from count
     current_session_id = getattr(request.state, "session_id", None)
     active_count = sum(
         1 for session in active_sessions
         if session.get("session_id") != current_session_id
     )
-    
+
     if active_count >= max_sessions:
         logger.warning(
             "Concurrent session limit exceeded",
@@ -226,7 +224,7 @@ def check_continuous_verification_required(
 
 class TrustBasedRateLimit:
     """Rate limiting based on device trust level."""
-    
+
     def __init__(
         self,
         high_trust_limit: int = 1000,
@@ -249,7 +247,7 @@ class TrustBasedRateLimit:
             "low": low_trust_limit
         }
         self.window_seconds = window_seconds
-    
+
     async def check_rate_limit(
         self,
         request: Request,
@@ -267,24 +265,24 @@ class TrustBasedRateLimit:
         """
         trust_level = policy["trust_level"]
         limit = self.limits.get(trust_level, self.limits["low"])
-        
+
         # Get device ID for rate limiting key
         device_id = getattr(request.state, "device_id", "unknown")
         key = f"rate_limit:{device_id}:{request.url.path}"
-        
+
         # Check rate limit using Redis
         from src.infrastructure.cache import get_redis_client
-        
+
         try:
             redis_client = await get_redis_client()
-            
+
             # Increment counter
             current_count = await redis_client.incr(key)
-            
+
             # Set expiry on first request
             if current_count == 1:
                 await redis_client.expire(key, self.window_seconds)
-            
+
             # Check if limit exceeded
             if current_count > limit:
                 logger.warning(
@@ -298,7 +296,7 @@ class TrustBasedRateLimit:
                     status_code=429,
                     detail=f"Rate limit exceeded. Trust level '{trust_level}' allows {limit} requests per {self.window_seconds} seconds"
                 )
-            
+
             logger.debug(
                 "Rate limit check passed",
                 device_id=device_id,
@@ -307,7 +305,7 @@ class TrustBasedRateLimit:
                 limit=limit,
                 window_seconds=self.window_seconds
             )
-            
+
         except HTTPException:
             raise
         except Exception as e:

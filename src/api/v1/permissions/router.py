@@ -3,33 +3,32 @@ Permission management API endpoints.
 Handles role assignment, resource permissions, and permission checks.
 """
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ....core.auth.permissions import PermissionChecker
 from ....core.auth.permission_service import PermissionService
+from ....core.auth.permissions import PermissionChecker
 from ....infrastructure.database.session import get_db
 from ...dependencies.context import get_current_user, get_tenant_context
 from ...dependencies.permissions import require_permission
 from .schemas import (
-    Role,
-    RoleCreate,
-    UserRoleAssignment,
-    UserRoleResponse,
-    ResourcePermissionGrant,
-    ResourcePermissionResponse,
     PermissionCheckRequest,
     PermissionCheckResponse,
-    UserPermissionsResponse
+    ResourcePermissionGrant,
+    ResourcePermissionResponse,
+    Role,
+    RoleCreate,
+    UserPermissionsResponse,
+    UserRoleAssignment,
+    UserRoleResponse,
 )
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
 
-@router.get("/roles", response_model=List[Role])
+@router.get("/roles", response_model=list[Role])
 async def list_roles(
     tenant_id: UUID = Depends(get_tenant_context),
     current_user: dict = Depends(get_current_user),
@@ -51,7 +50,7 @@ async def create_role(
 ):
     """Create a new custom role."""
     service = PermissionService(db)
-    
+
     try:
         role = await service.create_custom_role(
             tenant_id=tenant_id,
@@ -60,11 +59,11 @@ async def create_role(
             permissions=role_data.permissions,
             created_by=current_user["id"]
         )
-        
+
         # Return role with permissions
         roles = await service.get_tenant_roles(tenant_id)
         return next((r for r in roles if r["id"] == str(role.id)), None)
-        
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -83,7 +82,7 @@ async def assign_role_to_user(
 ):
     """Assign a role to a user."""
     service = PermissionService(db)
-    
+
     try:
         user_role = await service.assign_role_to_user(
             user_id=user_id,
@@ -91,7 +90,7 @@ async def assign_role_to_user(
             tenant_id=tenant_id,
             granted_by=current_user["id"]
         )
-        
+
         return UserRoleResponse(
             id=user_role.id,
             user_id=user_role.user_id,
@@ -100,7 +99,7 @@ async def assign_role_to_user(
             granted_by=user_role.granted_by,
             granted_at=user_role.granted_at
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,19 +118,19 @@ async def remove_role_from_user(
 ):
     """Remove a role from a user."""
     service = PermissionService(db)
-    
+
     success = await service.remove_role_from_user(
         user_id=user_id,
         role_id=role_id,
         tenant_id=tenant_id
     )
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role assignment not found"
         )
-    
+
     return {"message": "Role removed successfully"}
 
 
@@ -149,15 +148,15 @@ async def grant_resource_permission(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either user_id or team_id must be provided"
         )
-    
+
     if permission_data.user_id and permission_data.team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot grant to both user and team simultaneously"
         )
-    
+
     service = PermissionService(db)
-    
+
     resource_permission = await service.grant_resource_permission(
         resource_type=permission_data.resource_type,
         resource_id=permission_data.resource_id,
@@ -168,7 +167,7 @@ async def grant_resource_permission(
         team_id=permission_data.team_id,
         expires_at=permission_data.expires_at
     )
-    
+
     return ResourcePermissionResponse(
         id=resource_permission.id,
         resource_type=resource_permission.resource_type,
@@ -192,7 +191,7 @@ async def revoke_resource_permission(
 ):
     """Revoke permission on a specific resource from a user or team."""
     service = PermissionService(db)
-    
+
     success = await service.revoke_resource_permission(
         resource_type=permission_data.resource_type,
         resource_id=permission_data.resource_id,
@@ -201,13 +200,13 @@ async def revoke_resource_permission(
         user_id=permission_data.user_id,
         team_id=permission_data.team_id
     )
-    
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resource permission not found"
         )
-    
+
     return {"message": "Resource permission revoked successfully"}
 
 
@@ -220,7 +219,7 @@ async def check_permission(
 ):
     """Check if current user has a specific permission."""
     checker = PermissionChecker(db)
-    
+
     has_permission = await checker.check_permission(
         user_id=current_user["id"],
         tenant_id=tenant_id,
@@ -228,7 +227,7 @@ async def check_permission(
         resource_type=check_request.resource_type,
         resource_id=check_request.resource_id
     )
-    
+
     return PermissionCheckResponse(
         has_permission=has_permission,
         reason=None if has_permission else "Insufficient permissions"
@@ -244,18 +243,18 @@ async def get_my_permissions(
     """Get all permissions for the current user."""
     checker = PermissionChecker(db)
     service = PermissionService(db)
-    
+
     # Get user roles
     roles_data = await checker.get_user_roles(current_user["id"], tenant_id)
-    
+
     # Get user permissions
     permissions = await checker.get_user_permissions(current_user["id"], tenant_id)
-    
+
     # Get resource permissions
     resource_permissions_data = await service.get_user_resource_permissions(
         current_user["id"], tenant_id
     )
-    
+
     # Convert to response models
     roles = [
         Role(
@@ -270,11 +269,11 @@ async def get_my_permissions(
         )
         for role in roles_data
     ]
-    
+
     resource_permissions = [
         ResourcePermissionResponse(**rp) for rp in resource_permissions_data
     ]
-    
+
     return UserPermissionsResponse(
         user_id=current_user["id"],
         tenant_id=tenant_id,
@@ -295,18 +294,18 @@ async def get_user_permissions(
     """Get all permissions for a specific user (admin only)."""
     checker = PermissionChecker(db)
     service = PermissionService(db)
-    
+
     # Get user roles
     roles_data = await checker.get_user_roles(user_id, tenant_id)
-    
+
     # Get user permissions
     permissions = await checker.get_user_permissions(user_id, tenant_id)
-    
+
     # Get resource permissions
     resource_permissions_data = await service.get_user_resource_permissions(
         user_id, tenant_id
     )
-    
+
     # Convert to response models
     roles = [
         Role(
@@ -321,11 +320,11 @@ async def get_user_permissions(
         )
         for role in roles_data
     ]
-    
+
     resource_permissions = [
         ResourcePermissionResponse(**rp) for rp in resource_permissions_data
     ]
-    
+
     return UserPermissionsResponse(
         user_id=user_id,
         tenant_id=tenant_id,

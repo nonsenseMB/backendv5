@@ -1,10 +1,10 @@
 """Authentication API router."""
 from fastapi import APIRouter
 
-from .token import router as token_router
-from .device_endpoints import router as device_router
 from .certificate_endpoints import router as certificate_router
+from .device_endpoints import router as device_router
 from .device_management import router as device_management_router
+from .token import router as token_router
 
 # Create the main auth router
 router = APIRouter(prefix="/auth", tags=["authentication"])

@@ -3,9 +3,8 @@ JWT Authentication Middleware for FastAPI.
 Extracts and validates JWT tokens from requests.
 """
 import re
-from typing import Optional
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -15,8 +14,6 @@ from src.infrastructure.auth.exceptions import (
     AuthentikTokenExpiredError,
     AuthentikValidationError,
 )
-from src.infrastructure.auth.token_exchange import TokenExchangeService
-from src.infrastructure.auth.token_validator import TokenValidator
 
 logger = get_logger(__name__)
 
@@ -54,14 +51,11 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         self.token_validator = None
         self.token_exchange = None
         self._initialized = False
-    
+
     async def _ensure_initialized(self):
         """Ensure services are initialized."""
         if not self._initialized:
-            from src.infrastructure.auth.dependencies import (
-                get_token_validator,
-                get_token_exchange_service
-            )
+            from src.infrastructure.auth.dependencies import get_token_exchange_service, get_token_validator
             self.token_validator = get_token_validator()
             self.token_exchange = await get_token_exchange_service()
             self._initialized = True
@@ -70,7 +64,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         """Process the request and validate JWT if required."""
         # Ensure services are initialized
         await self._ensure_initialized()
-        
+
         # Check if endpoint requires authentication
         if self._is_public_endpoint(request.url.path):
             logger.debug("Skipping auth for public endpoint", path=request.url.path)
@@ -94,7 +88,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
             try:
                 jwt_manager = self.token_exchange.jwt_manager
                 token_payload = jwt_manager.decode_access_token(token)
-                
+
                 # Convert internal token payload to claims format
                 claims = {
                     "sub": token_payload.sub,
@@ -108,12 +102,12 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
                     "iat": token_payload.iat
                 }
                 logger.debug("Validated internal JWT token", user_id=token_payload.sub)
-                
+
             except Exception as internal_error:
                 # Not an internal token, try validating as Authentik token
                 logger.debug("Not an internal token, trying Authentik validation", error=str(internal_error))
                 claims = await self.token_validator.validate_access_token(token)
-            
+
             # Set request state with validated claims
             request.state.user_id = claims.get("sub")
             request.state.tenant_id = claims.get("tenant_id", settings.DEFAULT_TENANT_ID)
@@ -121,7 +115,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
             request.state.permissions = claims.get("permissions", [])
             request.state.groups = claims.get("groups", [])
             request.state.token_claims = claims
-            
+
             # Log successful authentication
             logger.info(
                 "Request authenticated",
@@ -129,27 +123,27 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
                 tenant_id=request.state.tenant_id,
                 path=request.url.path
             )
-            
+
             # Process request
             response = await call_next(request)
-            
+
             # Add security headers
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
-            
+
             return response
 
         except AuthentikTokenExpiredError as e:
             logger.info("Token expired, attempting refresh", error=str(e))
-            
+
             # Check for refresh token
             refresh_token = self._extract_refresh_token(request)
             if refresh_token:
                 try:
                     # Attempt token refresh
                     new_tokens = await self._refresh_tokens(refresh_token)
-                    
+
                     # Create response with new tokens
                     response = JSONResponse(
                         status_code=401,
@@ -165,7 +159,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
                             }
                         }
                     )
-                    
+
                     # Set new tokens in cookies if originally from cookies
                     if request.cookies.get("access_token"):
                         response.set_cookie(
@@ -184,12 +178,12 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
                             samesite="lax",
                             max_age=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
                         )
-                    
+
                     return response
-                    
+
                 except Exception as refresh_error:
                     logger.error("Token refresh failed", error=str(refresh_error))
-            
+
             return JSONResponse(
                 status_code=401,
                 content={
@@ -226,15 +220,15 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         # Check exact matches
         if path in PUBLIC_ENDPOINTS:
             return True
-        
+
         # Check pattern matches
         for pattern in PUBLIC_ENDPOINT_PATTERNS:
             if pattern.match(path):
                 return True
-        
+
         return False
 
-    def _extract_token(self, request: Request) -> Optional[str]:
+    def _extract_token(self, request: Request) -> str | None:
         """
         Extract JWT token from request.
         Checks Authorization header, then cookies.
@@ -243,17 +237,17 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             return auth_header[7:]  # Remove "Bearer " prefix
-        
+
         # Try cookie as fallback
         return request.cookies.get("access_token")
 
-    def _extract_refresh_token(self, request: Request) -> Optional[str]:
+    def _extract_refresh_token(self, request: Request) -> str | None:
         """Extract refresh token from request cookies or headers."""
         # Try header first
         refresh_header = request.headers.get("X-Refresh-Token")
         if refresh_header:
             return refresh_header
-        
+
         # Try cookie
         return request.cookies.get("refresh_token")
 
@@ -267,14 +261,14 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
             # This expects internal JWT refresh tokens, not Authentik tokens
             jwt_manager = self.token_exchange.jwt_manager
             new_access_token, new_refresh_token = jwt_manager.refresh_access_token(refresh_token)
-            
+
             return {
                 "access_token": new_access_token,
                 "refresh_token": new_refresh_token,
                 "token_type": "Bearer",
                 "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
             }
-            
+
         except Exception as e:
             logger.error("Token refresh failed", error=str(e))
             # If internal refresh fails, this might be an Authentik token

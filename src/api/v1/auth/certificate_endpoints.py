@@ -6,15 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies.auth import get_current_user
 from src.api.dependencies.trust import require_high_trust
-from src.infrastructure.database.session import get_async_session
 from src.api.v1.auth.certificate_schemas import (
-    CertificateApprovalRequest,
     CertificateEnrollmentRequest,
     CertificateEnrollmentResponse,
     CertificateInfo,
     CertificateListResponse,
     CertificateRevocationRequest,
-    CertificateTrustReport,
     CertificateValidationRequest,
     CertificateValidationResponse,
     EnrollmentTokenRequest,
@@ -24,12 +21,12 @@ from src.api.v1.auth.certificate_schemas import (
 )
 from src.core.logging import get_logger
 from src.core.logging.audit import AuditEventType, AuditSeverity, log_audit_event
-from src.infrastructure.database.models.auth import User, DeviceCertificate
+from src.infrastructure.auth.device_cert import DeviceCertificateManager, MutualTLSHandler
+from src.infrastructure.database.models.auth import DeviceCertificate, User, UserDevice
 from src.infrastructure.database.repositories.certificate import CertificateRepository
 from src.infrastructure.database.repositories.device import DeviceRepository
-from src.infrastructure.database.models.auth import UserDevice
+from src.infrastructure.database.session import get_async_session
 from src.infrastructure.database.unit_of_work import UnitOfWork
-from src.infrastructure.auth.device_cert import DeviceCertificateManager, MutualTLSHandler
 
 logger = get_logger(__name__)
 
@@ -52,24 +49,24 @@ async def enroll_device_certificate(
     """
     try:
         cert_manager = DeviceCertificateManager()
-        
+
         # Verify device exists and belongs to user
         async with UnitOfWork(session) as uow:
             device_repo = DeviceRepository(UserDevice, session, current_user.tenant_id)
             device = await device_repo.get_by_id(enrollment.device_id)
-            
+
             if not device:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Device not found"
                 )
-            
+
             if device.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to enroll certificate for this device"
                 )
-            
+
             # Enroll certificate
             success, cert_info, error = await cert_manager.enroll_certificate(
                 user_id=current_user.id,
@@ -78,19 +75,19 @@ async def enroll_device_certificate(
                 certificate_chain_pem=enrollment.certificate_chain,
                 enrollment_token=enrollment.enrollment_token
             )
-            
+
             if not success:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=error or "Certificate enrollment failed"
                 )
-            
+
             # Calculate trust score
             trust_score = cert_manager.calculate_certificate_trust_score(cert_info)
-            
+
             # Store certificate in database
             cert_repo = CertificateRepository(DeviceCertificate, session, current_user.tenant_id)
-            
+
             certificate = await cert_repo.create({
                 "id": uuid4(),
                 "device_id": enrollment.device_id,
@@ -114,9 +111,9 @@ async def enroll_device_certificate(
                 "compliance_checked": cert_info.get("compliance_checked", False),
                 "compliance_notes": cert_info.get("compliance_notes"),
             })
-            
+
             await uow.commit()
-        
+
         # Log enrollment
         log_audit_event(
             event_type=AuditEventType.DEVICE_REGISTERED,
@@ -131,7 +128,7 @@ async def enroll_device_certificate(
                 "auto_approved": cert_info.get("is_trusted", False)
             }
         )
-        
+
         logger.info(
             "Certificate enrolled successfully",
             user_id=str(current_user.id),
@@ -139,7 +136,7 @@ async def enroll_device_certificate(
             certificate_id=str(certificate.id),
             trust_score=trust_score
         )
-        
+
         return CertificateEnrollmentResponse(
             certificate_id=certificate.id,
             serial_number=cert_info["serial_number"],
@@ -153,7 +150,7 @@ async def enroll_device_certificate(
             status="enrolled" if cert_info.get("is_trusted") else "pending_approval",
             message="Certificate enrolled successfully"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -188,19 +185,19 @@ async def list_device_certificates(
             # Verify device access
             device_repo = DeviceRepository(UserDevice, session, current_user.tenant_id)
             device = await device_repo.get_by_id(device_id)
-            
+
             if not device:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Device not found"
                 )
-            
+
             if device.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view this device"
                 )
-            
+
             # Get certificates
             cert_repo = CertificateRepository(DeviceCertificate, session, current_user.tenant_id)
             certificates = await cert_repo.get_device_certificates(
@@ -208,16 +205,16 @@ async def list_device_certificates(
                 active_only=False,
                 include_revoked=include_revoked
             )
-            
+
             # Convert to response models
             cert_infos = []
             active_count = 0
             expired_count = 0
             revoked_count = 0
-            
+
             from datetime import datetime
             now = datetime.utcnow()
-            
+
             for cert in certificates:
                 cert_info = CertificateInfo(
                     id=cert.id,
@@ -249,7 +246,7 @@ async def list_device_certificates(
                     updated_at=cert.updated_at
                 )
                 cert_infos.append(cert_info)
-                
+
                 # Count statuses
                 if cert.revoked:
                     revoked_count += 1
@@ -257,7 +254,7 @@ async def list_device_certificates(
                     expired_count += 1
                 elif cert.is_active:
                     active_count += 1
-            
+
             logger.info(
                 "Listed device certificates",
                 user_id=str(current_user.id),
@@ -265,7 +262,7 @@ async def list_device_certificates(
                 total_count=len(cert_infos),
                 active_count=active_count
             )
-            
+
             return CertificateListResponse(
                 certificates=cert_infos,
                 total=len(cert_infos),
@@ -273,7 +270,7 @@ async def list_device_certificates(
                 expired_count=expired_count,
                 revoked_count=revoked_count
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -307,35 +304,35 @@ async def revoke_certificate(
     try:
         async with UnitOfWork(session) as uow:
             cert_repo = CertificateRepository(DeviceCertificate, session, current_user.tenant_id)
-            
+
             # Get certificate
             certificate = await cert_repo.get_by_id(certificate_id)
-            
+
             if not certificate:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Certificate not found"
                 )
-            
+
             # Verify device ownership
             device_repo = DeviceRepository(UserDevice, session, current_user.tenant_id)
             device = await device_repo.get_by_id(certificate.device_id)
-            
+
             if not device or device.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to revoke this certificate"
                 )
-            
+
             # Revoke certificate
             await cert_repo.revoke_certificate(
                 certificate_id=certificate_id,
                 reason=revocation.reason,
                 revoked_by=current_user.id
             )
-            
+
             await uow.commit()
-        
+
         # Log revocation
         log_audit_event(
             event_type=AuditEventType.DEVICE_REMOVED,
@@ -349,14 +346,14 @@ async def revoke_certificate(
                 "revocation_reason": revocation.reason
             }
         )
-        
+
         logger.info(
             "Certificate revoked",
             user_id=str(current_user.id),
             certificate_id=str(certificate_id),
             reason=revocation.reason
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -391,19 +388,19 @@ async def generate_enrollment_token(
         async with UnitOfWork(session) as uow:
             device_repo = DeviceRepository(UserDevice, session, current_user.tenant_id)
             device = await device_repo.get_by_id(request_data.device_id)
-            
+
             if not device:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Device not found"
                 )
-            
+
             if device.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to generate token for this device"
                 )
-        
+
         # Generate token
         cert_manager = DeviceCertificateManager()
         token = await cert_manager.generate_enrollment_token(
@@ -411,23 +408,23 @@ async def generate_enrollment_token(
             device_id=request_data.device_id,
             validity_hours=request_data.validity_hours
         )
-        
+
         from datetime import timedelta
         expires_at = datetime.utcnow() + timedelta(hours=request_data.validity_hours)
-        
+
         logger.info(
             "Generated enrollment token",
             user_id=str(current_user.id),
             device_id=str(request_data.device_id),
             validity_hours=request_data.validity_hours
         )
-        
+
         return EnrollmentTokenResponse(
             token=token,
             expires_at=expires_at,
             device_id=request_data.device_id
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -457,37 +454,37 @@ async def validate_certificate(
     """
     try:
         from src.infrastructure.auth.cert_validator import CertificateValidator
-        
+
         validator = CertificateValidator()
         is_valid, cert_info, error = validator.validate_certificate(
             cert_pem=validation.certificate,
             check_revocation=validation.check_revocation,
             required_cn=validation.required_cn
         )
-        
+
         trust_score = None
         if is_valid:
             cert_manager = DeviceCertificateManager()
             trust_score = cert_manager.calculate_certificate_trust_score(cert_info)
-        
+
         validation_errors = []
         if error:
             validation_errors.append(error)
-        
+
         logger.info(
             "Certificate validation completed",
             user_id=str(current_user.id),
             is_valid=is_valid,
             trust_score=trust_score
         )
-        
+
         return CertificateValidationResponse(
             is_valid=is_valid,
             certificate_info=cert_info if is_valid else None,
             validation_errors=validation_errors,
             trust_score=trust_score
         )
-        
+
     except Exception as e:
         logger.error(
             "Certificate validation failed",
@@ -520,50 +517,50 @@ async def validate_mutual_tls(
             request_headers={"X-SSL-Client-Cert": validation.client_certificate},
             required_cn=validation.required_cn
         )
-        
+
         if not is_valid:
             return MutualTLSValidationResponse(
                 is_valid=False,
                 error=error
             )
-        
+
         # Look up device by certificate
         async with UnitOfWork(session) as uow:
             cert_repo = CertificateRepository(DeviceCertificate, session, current_user.tenant_id)
             certificate = await cert_repo.get_by_fingerprint(cert_info["fingerprint_sha256"])
-            
+
             if not certificate:
                 return MutualTLSValidationResponse(
                     is_valid=False,
                     error="Certificate not enrolled"
                 )
-            
+
             if certificate.revoked or not certificate.is_active:
                 return MutualTLSValidationResponse(
                     is_valid=False,
                     error="Certificate revoked or inactive"
                 )
-            
+
             # Get device trust score
             device_repo = DeviceRepository(UserDevice, session, current_user.tenant_id)
             device = await device_repo.get_by_id(certificate.device_id)
-            
+
             trust_score = int(device.trust_score) if device else 0
-        
+
         logger.info(
             "Mutual TLS validation successful",
             user_id=str(current_user.id),
             device_id=str(certificate.device_id),
             certificate_serial=certificate.serial_number
         )
-        
+
         return MutualTLSValidationResponse(
             is_valid=True,
             certificate_info=cert_info,
             device_id=certificate.device_id,
             trust_score=trust_score
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

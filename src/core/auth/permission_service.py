@@ -3,33 +3,25 @@ Permission service for managing roles and permissions.
 Provides high-level operations for the permission system.
 """
 
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from ...infrastructure.database.models.permission import (
-    Permission,
-    Role,
-    RolePermission,
-    UserRole,
-    ResourcePermission
-)
-from ...infrastructure.database.models.auth import User
-from .permissions import SystemRole, SYSTEM_ROLE_PERMISSIONS
+from ...infrastructure.database.models.permission import Permission, ResourcePermission, Role, RolePermission, UserRole
+from .permissions import SYSTEM_ROLE_PERMISSIONS, SystemRole
 
 
 class PermissionService:
     """Service for managing permissions, roles, and assignments."""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
-    async def create_system_roles(self, tenant_id: UUID) -> List[Role]:
+
+    async def create_system_roles(self, tenant_id: UUID) -> list[Role]:
         """Create system roles for a tenant."""
         created_roles = []
-        
+
         for system_role in SystemRole:
             # Check if role already exists
             existing_role = (
@@ -43,11 +35,11 @@ class PermissionService:
                 )
                 .first()
             )
-            
+
             if existing_role:
                 created_roles.append(existing_role)
                 continue
-            
+
             # Create the role
             role = Role(
                 tenant_id=tenant_id,
@@ -57,17 +49,17 @@ class PermissionService:
             )
             self.db.add(role)
             self.db.flush()  # Get the ID
-            
+
             # Add permissions to the role
             permissions = SYSTEM_ROLE_PERMISSIONS[system_role]
             for permission_name in permissions:
                 await self._add_permission_to_role(role.id, permission_name)
-            
+
             created_roles.append(role)
-        
+
         self.db.commit()
         return created_roles
-    
+
     async def _add_permission_to_role(self, role_id: UUID, permission_name: str) -> None:
         """Add a permission to a role."""
         # Get or create permission
@@ -76,7 +68,7 @@ class PermissionService:
             .filter(Permission.name == permission_name)
             .first()
         )
-        
+
         if not permission:
             # Extract resource and action from permission name
             if '.' in permission_name:
@@ -84,7 +76,7 @@ class PermissionService:
             else:
                 resource = permission_name
                 action = 'all'
-            
+
             permission = Permission(
                 name=permission_name,
                 resource=resource,
@@ -93,7 +85,7 @@ class PermissionService:
             )
             self.db.add(permission)
             self.db.flush()
-        
+
         # Check if role-permission already exists
         existing = (
             self.db.query(RolePermission)
@@ -105,14 +97,14 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if not existing:
             role_permission = RolePermission(
                 role_id=role_id,
                 permission_id=permission.id
             )
             self.db.add(role_permission)
-    
+
     async def assign_role_to_user(
         self,
         user_id: UUID,
@@ -133,10 +125,10 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if existing:
             return existing
-        
+
         # Create new assignment
         user_role = UserRole(
             user_id=user_id,
@@ -144,11 +136,11 @@ class PermissionService:
             tenant_id=tenant_id,
             granted_by=granted_by
         )
-        
+
         self.db.add(user_role)
         self.db.commit()
         return user_role
-    
+
     async def remove_role_from_user(
         self,
         user_id: UUID,
@@ -167,14 +159,14 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if user_role:
             self.db.delete(user_role)
             self.db.commit()
             return True
-        
+
         return False
-    
+
     async def grant_resource_permission(
         self,
         resource_type: str,
@@ -182,17 +174,17 @@ class PermissionService:
         permission: str,
         tenant_id: UUID,
         granted_by: UUID,
-        user_id: Optional[UUID] = None,
-        team_id: Optional[UUID] = None,
-        expires_at: Optional[str] = None
+        user_id: UUID | None = None,
+        team_id: UUID | None = None,
+        expires_at: str | None = None
     ) -> ResourcePermission:
         """Grant permission on a specific resource to a user or team."""
         if not user_id and not team_id:
             raise ValueError("Either user_id or team_id must be provided")
-        
+
         if user_id and team_id:
             raise ValueError("Cannot grant to both user and team simultaneously")
-        
+
         # Check if permission already exists
         existing = (
             self.db.query(ResourcePermission)
@@ -208,10 +200,10 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if existing:
             return existing
-        
+
         # Create new resource permission
         resource_permission = ResourcePermission(
             resource_type=resource_type,
@@ -223,19 +215,19 @@ class PermissionService:
             granted_by=granted_by,
             expires_at=expires_at
         )
-        
+
         self.db.add(resource_permission)
         self.db.commit()
         return resource_permission
-    
+
     async def revoke_resource_permission(
         self,
         resource_type: str,
         resource_id: UUID,
         permission: str,
         tenant_id: UUID,
-        user_id: Optional[UUID] = None,
-        team_id: Optional[UUID] = None
+        user_id: UUID | None = None,
+        team_id: UUID | None = None
     ) -> bool:
         """Revoke permission on a specific resource from a user or team."""
         resource_permission = (
@@ -252,22 +244,22 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if resource_permission:
             self.db.delete(resource_permission)
             self.db.commit()
             return True
-        
+
         return False
-    
-    async def get_tenant_roles(self, tenant_id: UUID) -> List[Dict]:
+
+    async def get_tenant_roles(self, tenant_id: UUID) -> list[dict]:
         """Get all roles available in a tenant."""
         roles = (
             self.db.query(Role)
             .filter(Role.tenant_id == tenant_id)
             .all()
         )
-        
+
         result = []
         for role in roles:
             # Get permissions for this role
@@ -277,7 +269,7 @@ class PermissionService:
                 .filter(RolePermission.role_id == role.id)
                 .all()
             )
-            
+
             result.append({
                 "id": str(role.id),
                 "name": role.name,
@@ -287,15 +279,15 @@ class PermissionService:
                 "created_at": role.created_at.isoformat(),
                 "updated_at": role.updated_at.isoformat()
             })
-        
+
         return result
-    
+
     async def get_user_resource_permissions(
         self,
         user_id: UUID,
         tenant_id: UUID,
-        resource_type: Optional[str] = None
-    ) -> List[Dict]:
+        resource_type: str | None = None
+    ) -> list[dict]:
         """Get resource-specific permissions for a user."""
         query = (
             self.db.query(ResourcePermission)
@@ -306,12 +298,12 @@ class PermissionService:
                 )
             )
         )
-        
+
         if resource_type:
             query = query.filter(ResourcePermission.resource_type == resource_type)
-        
+
         permissions = query.all()
-        
+
         return [
             {
                 "id": str(perm.id),
@@ -324,13 +316,13 @@ class PermissionService:
             }
             for perm in permissions
         ]
-    
+
     async def create_custom_role(
         self,
         tenant_id: UUID,
         name: str,
         description: str,
-        permissions: List[str],
+        permissions: list[str],
         created_by: UUID
     ) -> Role:
         """Create a custom role with specified permissions."""
@@ -345,10 +337,10 @@ class PermissionService:
             )
             .first()
         )
-        
+
         if existing:
             raise ValueError(f"Role '{name}' already exists in this tenant")
-        
+
         # Create the role
         role = Role(
             tenant_id=tenant_id,
@@ -358,10 +350,10 @@ class PermissionService:
         )
         self.db.add(role)
         self.db.flush()
-        
+
         # Add permissions
         for permission_name in permissions:
             await self._add_permission_to_role(role.id, permission_name)
-        
+
         self.db.commit()
         return role

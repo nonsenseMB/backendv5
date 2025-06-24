@@ -9,7 +9,12 @@ from src.infrastructure.database.models.agent import Agent
 from src.infrastructure.database.models.auth import User, UserDevice
 from src.infrastructure.database.models.conversation import Conversation, ConversationCheckpoint, Message
 from src.infrastructure.database.models.document import Document, DocumentContent, DocumentPermission, DocumentShare
-from src.infrastructure.database.models.knowledge import DocumentVector, KnowledgeBase, KnowledgeEntity, KnowledgeRelation
+from src.infrastructure.database.models.knowledge import (
+    DocumentVector,
+    KnowledgeBase,
+    KnowledgeEntity,
+    KnowledgeRelation,
+)
 from src.infrastructure.database.models.llm import LLMAPIKey, LLMProvider
 from src.infrastructure.database.models.memory import UserPreferences
 from src.infrastructure.database.models.team import Team, TeamMember

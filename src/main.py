@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         logger.info("🛑 Log cleanup task cancelled")
-    
+
     # Close Redis connection
     if redis_client:
         logger.info("Closing Redis connection...")
@@ -159,7 +159,7 @@ async def logging_middleware(request: Request, call_next):
     # Get tenant ID from context (set by tenant middleware)
     from src.core.context import get_tenant_context
     tenant_id = get_tenant_context()
-    
+
     # Set request context for all logs in this request
     context = RequestContext(
         request_id=request_id,
@@ -223,6 +223,10 @@ register_auth_exception_handlers(app)
 # Include routers
 app.include_router(v1_router)
 app.include_router(admin_router)
+
+# Include WebSocket router
+from src.api.websocket.router import router as websocket_router
+app.include_router(websocket_router)
 
 
 @app.get("/")

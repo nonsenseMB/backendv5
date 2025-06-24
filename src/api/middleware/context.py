@@ -2,7 +2,6 @@
 Request context middleware for FastAPI.
 Sets up request context for logging, auditing, and tracking.
 """
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, Response
@@ -30,25 +29,25 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     This middleware should run AFTER authentication middleware
     to have access to user information in request.state.
     """
-    
+
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process the request and set up context."""
         # Generate request ID
         request_id = request.headers.get("X-Request-ID", create_request_id())
-        
+
         # Extract user information from request state (set by auth middleware)
         user_id = getattr(request.state, "user_id", None)
         tenant_id = getattr(request.state, "tenant_id", None)
         session_id = getattr(request.state, "session_id", None)
         permissions = getattr(request.state, "permissions", [])
         groups = getattr(request.state, "groups", [])
-        
+
         # Extract request metadata
         ip_address = self._get_client_ip(request)
         user_agent = request.headers.get("User-Agent")
         device_id = request.headers.get("X-Device-ID")
         api_version = request.headers.get("X-API-Version", "v1")
-        
+
         # Create request context
         request_context = RequestContext(
             request_id=request_id,
@@ -65,23 +64,23 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             path=str(request.url.path),
             query_params=dict(request.query_params),
         )
-        
+
         # Set request context
         set_request_context(request_context)
-        
+
         # Set tenant context if available
         if tenant_id:
             set_tenant_context(tenant_id)
-        
+
         # Set user context if authenticated
         if user_id and user_id != "anonymous":
             user_context = await self._create_user_context(request)
             if user_context:
                 set_user_context(user_context)
-        
+
         # Add request ID to response headers
         request.state.request_id = request_id
-        
+
         # Log request start
         logger.info(
             "Request started",
@@ -92,14 +91,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             tenant_id=tenant_id,
             ip_address=ip_address
         )
-        
+
         try:
             # Process request
             response = await call_next(request)
-            
+
             # Add request ID to response headers
             response.headers["X-Request-ID"] = request_id
-            
+
             # Log request completion
             logger.info(
                 "Request completed",
@@ -108,9 +107,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 method=request.method,
                 path=str(request.url.path)
             )
-            
+
             return response
-            
+
         except Exception as e:
             # Log request failure
             logger.error(
@@ -122,13 +121,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 exc_info=True
             )
             raise
-            
+
         finally:
             # Clear context
             clear_request_context()
             clear_user_context()
-    
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+
+    def _get_client_ip(self, request: Request) -> str | None:
         """
         Extract client IP address from request.
         
@@ -139,19 +138,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if forwarded_for:
             # Take the first IP in the chain
             return forwarded_for.split(",")[0].strip()
-        
+
         # Check X-Real-IP header
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip
-        
+
         # Fall back to direct client IP
         if request.client:
             return request.client.host
-        
+
         return None
-    
-    async def _create_user_context(self, request: Request) -> Optional[UserContext]:
+
+    async def _create_user_context(self, request: Request) -> UserContext | None:
         """
         Create user context from request state.
         
@@ -161,7 +160,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             return None
-        
+
         try:
             # Get user information from request state (populated by auth middleware)
             # In a real implementation, you might fetch additional user data from DB
@@ -177,15 +176,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 auth_provider=getattr(request.state, "auth_provider", "internal"),
                 external_id=getattr(request.state, "external_id", None),
             )
-            
+
             # Add tenant roles if available
             tenant_id = getattr(request.state, "tenant_id", None)
             tenant_role = getattr(request.state, "tenant_role", None)
             if tenant_id and tenant_role:
                 user_context.tenant_roles[str(tenant_id)] = tenant_role
-            
+
             return user_context
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to create user context",

@@ -1,5 +1,4 @@
 """Device trust scoring and management."""
-from typing import Optional
 from uuid import UUID
 
 from src.core.logging import get_logger
@@ -12,23 +11,23 @@ TRUSTED_AAGUIDS = {
     # Windows Hello
     "08987058-cadc-4b81-b6e1-30de50dcbe96": {"name": "Windows Hello", "trust_bonus": 20},
     "9ddd1817-af5a-4672-a2b9-3e3dd95000a9": {"name": "Windows Hello TPM", "trust_bonus": 30},
-    
+
     # Apple Touch ID / Face ID
     "dd4ec289-e01d-41c9-bb89-70fa845d4bf2": {"name": "Apple Touch ID", "trust_bonus": 25},
-    
+
     # YubiKey
     "ee882879-721c-4913-9775-3dfcce97072a": {"name": "YubiKey 5", "trust_bonus": 35},
     "fa2b99dc-9e39-4257-8f92-4a30d23c4118": {"name": "YubiKey 5 NFC", "trust_bonus": 35},
-    
+
     # Google Titan
     "0bb43545-fd2c-4185-87dd-feb0b2916ace": {"name": "Google Titan", "trust_bonus": 30},
 }
 
 
 def calculate_trust_score(
-    attestation_type: Optional[str] = None,
-    authenticator_attachment: Optional[str] = None,
-    aaguid: Optional[UUID] = None,
+    attestation_type: str | None = None,
+    authenticator_attachment: str | None = None,
+    aaguid: UUID | None = None,
     user_verification: bool = True,
     is_resident_key: bool = False
 ) -> int:
@@ -46,10 +45,10 @@ def calculate_trust_score(
         Trust score between 0-100
     """
     score = 0
-    
+
     # Base score for successful registration
     score += 10
-    
+
     # Attestation scoring
     if attestation_type:
         if attestation_type == "enterprise":
@@ -60,14 +59,14 @@ def calculate_trust_score(
             score += 20  # Indirect attestation
         elif attestation_type == "none":
             score += 5   # Self-attestation only
-    
+
     # Authenticator attachment scoring
     if authenticator_attachment:
         if authenticator_attachment == "platform":
             score += 20  # Platform authenticators (TPM, Secure Enclave)
         elif authenticator_attachment == "cross-platform":
             score += 10  # External authenticators (USB, NFC)
-    
+
     # Known authenticator bonus
     if aaguid:
         aaguid_str = str(aaguid).lower()
@@ -79,18 +78,18 @@ def calculate_trust_score(
                 aaguid=aaguid_str,
                 name=authenticator_info["name"]
             )
-    
+
     # User verification bonus
     if user_verification:
         score += 10  # PIN, biometric, or other user verification
-    
+
     # Resident key bonus
     if is_resident_key:
         score += 5  # Discoverable credentials are more secure
-    
+
     # Cap at 100
     final_score = min(score, 100)
-    
+
     logger.info(
         "Calculated device trust score",
         attestation_type=attestation_type,
@@ -100,7 +99,7 @@ def calculate_trust_score(
         is_resident_key=is_resident_key,
         final_score=final_score
     )
-    
+
     return final_score
 
 
@@ -230,22 +229,22 @@ def adjust_trust_score_for_usage(
         Adjusted trust score
     """
     adjusted_score = current_score
-    
+
     # Bonus for regular usage
     if use_count > 50 and days_since_registration > 30:
         adjusted_score += 10
     elif use_count > 20 and days_since_registration > 14:
         adjusted_score += 5
-    
+
     # Bonus for successful auth streak
     if successful_auth_streak > 20:
         adjusted_score += 5
     elif successful_auth_streak > 10:
         adjusted_score += 3
-    
+
     # Cap at 100
     final_score = min(adjusted_score, 100)
-    
+
     if final_score != current_score:
         logger.info(
             "Adjusted device trust score",
@@ -255,5 +254,5 @@ def adjust_trust_score_for_usage(
             days_since_registration=days_since_registration,
             successful_auth_streak=successful_auth_streak
         )
-    
+
     return final_score

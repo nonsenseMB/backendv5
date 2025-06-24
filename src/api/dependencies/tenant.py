@@ -2,7 +2,6 @@
 Tenant-related dependencies for FastAPI endpoints.
 Provides tenant extraction and validation.
 """
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -42,7 +41,7 @@ async def get_current_tenant_id(request: Request) -> UUID:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid tenant context",
             )
-    
+
     # Check context var as fallback
     tenant_id_str = get_tenant_context()
     if tenant_id_str:
@@ -54,7 +53,7 @@ async def get_current_tenant_id(request: Request) -> UUID:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid tenant context",
             )
-    
+
     logger.warning("No tenant context found", path=request.url.path)
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -80,24 +79,24 @@ async def get_current_tenant(
         HTTPException: If tenant is not found or inactive
     """
     tenant_id = await get_current_tenant_id(request)
-    
+
     uow = UnitOfWork(session)
     tenant = await uow.tenants.get(tenant_id)
-    
+
     if not tenant:
         logger.error("Tenant not found in database", tenant_id=str(tenant_id))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found",
         )
-    
+
     if not tenant.is_active:
         logger.warning("Inactive tenant attempted access", tenant_id=str(tenant_id))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tenant is inactive",
         )
-    
+
     logger.debug("Tenant retrieved via dependency", tenant_id=str(tenant_id), name=tenant.name)
     return tenant
 
@@ -105,7 +104,7 @@ async def get_current_tenant(
 async def get_optional_tenant(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
-) -> Optional[Tenant]:
+) -> Tenant | None:
     """
     Get the current tenant if available, otherwise return None.
     Useful for endpoints that support both tenant-scoped and global access.
@@ -122,22 +121,22 @@ async def get_optional_tenant(
     if not tenant_id_str:
         # Check context var
         tenant_id_str = get_tenant_context()
-    
+
     if not tenant_id_str:
         return None
-    
+
     try:
         tenant_id = UUID(tenant_id_str)
     except (ValueError, TypeError):
         logger.warning("Invalid tenant_id format in optional tenant", tenant_id=tenant_id_str)
         return None
-    
+
     uow = UnitOfWork(session)
     tenant = await uow.tenants.get(tenant_id)
-    
+
     if tenant and tenant.is_active:
         return tenant
-    
+
     return None
 
 
@@ -176,17 +175,17 @@ async def get_tenant_user(
         HTTPException: If user is not a member of the tenant
     """
     uow = UnitOfWork(session, current_tenant.id)
-    
+
     if not uow.tenant_users:
         logger.error("Tenant users repository not available", tenant_id=str(current_tenant.id))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Tenant context not properly initialized",
         )
-    
+
     # Find the tenant-user association
     tenant_users = await uow.tenant_users.get_by(user_id=current_user.id, tenant_id=current_tenant.id)
-    
+
     if not tenant_users:
         logger.warning(
             "User not member of tenant",
@@ -197,9 +196,9 @@ async def get_tenant_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this tenant",
         )
-    
+
     tenant_user = tenant_users[0]  # Should be unique by constraint
-    
+
     if not tenant_user.is_active:
         logger.warning(
             "Inactive tenant membership",
@@ -210,7 +209,7 @@ async def get_tenant_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User membership in this tenant is inactive",
         )
-    
+
     return tenant_user
 
 
@@ -235,10 +234,10 @@ async def require_tenant_role(required_role: str):
             "admin": 2,
             "owner": 3,
         }
-        
+
         user_role_level = role_hierarchy.get(tenant_user.role, 0)
         required_role_level = role_hierarchy.get(required_role, 0)
-        
+
         if user_role_level < required_role_level:
             logger.warning(
                 "Insufficient tenant role",
@@ -251,9 +250,9 @@ async def require_tenant_role(required_role: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{required_role}' or higher required",
             )
-        
+
         return tenant_user
-    
+
     return check_role
 
 
@@ -273,5 +272,5 @@ async def ensure_tenant_context(
     # Set the tenant context if not already set
     if not get_tenant_context():
         set_tenant_context(tenant.id)
-    
+
     return tenant
