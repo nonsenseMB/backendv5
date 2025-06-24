@@ -8,6 +8,18 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
+class UserBasicResponse(BaseModel):
+    """Basic user info for references in other responses."""
+    id: UUID
+    email: EmailStr
+    username: str | None = None
+    full_name: str | None = None
+    avatar_url: str | None = None
+    
+    class Config:
+        from_attributes = True
+
+
 class NotificationPreferences(BaseModel):
     """Notification preferences schema."""
     email_notifications: bool = Field(default=True, description="Enable email notifications")

@@ -134,6 +134,10 @@ class InsufficientPermissionsError(AuthenticationError):
         )
 
 
+# Alias for backwards compatibility and common usage
+PermissionDeniedError = InsufficientPermissionsError
+
+
 class TenantAccessDeniedError(AuthenticationError):
     """Raised when tenant isolation is violated."""
 
