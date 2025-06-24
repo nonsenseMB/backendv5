@@ -29,7 +29,7 @@ class TokenExchangeAPIRequest(BaseModel):
     """API request model for token exchange."""
 
     authentik_token: str = Field(..., description="Authentik JWT token")
-    tenant_id: UUID = Field(..., description="Target tenant ID")
+    tenant_id: str | UUID = Field(..., description="Target tenant ID")
 
 
 class TokenExchangeAPIResponse(BaseModel):
@@ -55,21 +55,24 @@ class ErrorResponse(BaseModel):
     details: dict = Field(default_factory=dict, description="Additional error details")
 
 
-def get_token_exchange_service() -> TokenExchangeService:
+async def get_token_exchange_service() -> TokenExchangeService:
     """Dependency to get token exchange service instance."""
-    from src.domain.auth import SessionService
+    from src.domain.auth import SessionService, UserService
+    from src.infrastructure.database.session import AsyncSessionLocal
+    from src.infrastructure.database.unit_of_work import UnitOfWork
 
     # Create service instances
     authentik_client = AuthentikClient()
-    token_validator = TokenValidator(authentik_client)
+    token_validator = TokenValidator()  # Use default config
     jwt_manager = JWTManager()
 
     # Create session service (in-memory for now)
     session_service = SessionService()
 
-    # For user service, we need database access
-    # This is a simplified version - in production, use proper dependency injection
-    user_service = None  # Will be None until DB is properly configured
+    # Create database session and user service
+    async_session = AsyncSessionLocal()
+    uow = UnitOfWork(async_session)
+    user_service = UserService(uow)
 
     return TokenExchangeService(
         authentik_client=authentik_client,
@@ -98,7 +101,6 @@ def get_token_exchange_service() -> TokenExchangeService:
 )
 async def exchange_token(
     request: TokenExchangeAPIRequest,
-    service: TokenExchangeService = Depends(get_token_exchange_service),
 ) -> TokenExchangeAPIResponse:
     """
     Exchange an Authentik token for internal API tokens.
@@ -120,10 +122,23 @@ async def exchange_token(
         500: Internal server error
     """
     try:
+        # Get service instance
+        service = await get_token_exchange_service()
+        
+        # Handle default tenant ID
+        if isinstance(request.tenant_id, str) and request.tenant_id == "default":
+            # Use a default UUID for the default tenant
+            tenant_id = UUID("00000000-0000-0000-0000-000000000000")
+        elif isinstance(request.tenant_id, str):
+            # Try to parse as UUID
+            tenant_id = UUID(request.tenant_id)
+        else:
+            tenant_id = request.tenant_id
+            
         # Convert API request to service request
         service_request = TokenExchangeRequest(
             authentik_token=request.authentik_token,
-            tenant_id=request.tenant_id,
+            tenant_id=tenant_id,
         )
 
         # Perform token exchange
@@ -214,7 +229,6 @@ async def exchange_token(
 )
 async def refresh_token(
     request: TokenRefreshRequest,
-    service: TokenExchangeService = Depends(get_token_exchange_service),
 ) -> TokenExchangeAPIResponse:
     """
     Refresh API tokens using a valid refresh token.
@@ -234,6 +248,9 @@ async def refresh_token(
         500: Internal server error
     """
     try:
+        # Get service instance
+        service = await get_token_exchange_service()
+        
         # Perform token refresh
         response = await service.refresh_token(request.refresh_token)
 

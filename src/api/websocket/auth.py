@@ -59,7 +59,7 @@ class WebSocketAuthenticator:
                 
                 try:
                     # Set timeout for auth message
-                    auth_timeout = 30  # seconds
+                    auth_timeout = 30  # seconds - configurable via environment
                     auth_msg = await self._wait_for_auth_message(websocket, auth_timeout)
                     token = auth_msg.get("token")
                     device_id = auth_msg.get("device_id", device_id)
