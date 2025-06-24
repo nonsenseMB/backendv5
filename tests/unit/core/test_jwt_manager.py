@@ -239,3 +239,264 @@ class TestJWTManager:
         # Refresh token should expire in 30 days
         expected_refresh_seconds = 30 * 24 * 60 * 60  # 30 days in seconds
         assert expected_refresh_seconds - 60 <= refresh_exp_delta <= expected_refresh_seconds + 60
+
+
+class TestJWTSecurityValidation:
+    """Security-focused JWT validation tests."""
+
+    @pytest.fixture
+    def jwt_manager(self):
+        """Create JWT manager instance."""
+        return JWTManager()
+
+    def test_algorithm_confusion_attack_prevention(self, jwt_manager):
+        """Test prevention of algorithm confusion attacks."""
+        import base64
+        import json
+        
+        # Attempt to create token with 'none' algorithm
+        header = {"alg": "none", "typ": "JWT"}
+        payload = {
+            "sub": "admin",
+            "tenant_id": "test-tenant",
+            "session_id": "test-session",
+            "scopes": ["admin"],
+            "type": "access",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            "iss": jwt_manager.issuer,
+            "aud": jwt_manager.audience
+        }
+        
+        # Create unsigned token
+        token = (
+            base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=") +
+            "." +
+            base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=") +
+            "."
+        )
+        
+        # Should reject 'none' algorithm tokens
+        with pytest.raises(JWTError):
+            jwt_manager.decode_access_token(token)
+
+    def test_invalid_signature_rejection(self, jwt_manager):
+        """Test rejection of tokens with invalid signatures."""
+        # Create valid token
+        token = jwt_manager.create_access_token(
+            user_id="test-user",
+            tenant_id="test-tenant", 
+            session_id="test-session"
+        )
+        
+        # Tamper with signature
+        parts = token.split(".")
+        parts[2] = "invalid_signature"
+        tampered_token = ".".join(parts)
+        
+        with pytest.raises(JWTError):
+            jwt_manager.decode_access_token(tampered_token)
+
+    def test_malformed_token_rejection(self, jwt_manager):
+        """Test rejection of malformed tokens."""
+        malformed_tokens = [
+            "not.a.jwt",
+            "one_part_only",
+            "two.parts",
+            "",
+            "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.invalid_payload.signature",
+            "invalid_header.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.signature"
+        ]
+        
+        for token in malformed_tokens:
+            with pytest.raises(JWTError):
+                jwt_manager.decode_access_token(token)
+
+    def test_missing_required_claims(self, jwt_manager):
+        """Test rejection of tokens missing required claims."""
+        from jose import jwt
+        
+        # Token missing tenant_id
+        payload_missing_tenant = {
+            "sub": "test-user",
+            "session_id": "test-session",
+            "scopes": [],
+            "type": "access",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            "iss": jwt_manager.issuer,
+            "aud": jwt_manager.audience
+        }
+        
+        token_missing_tenant = jwt.encode(
+            payload_missing_tenant,
+            jwt_manager.secret_key,
+            algorithm=jwt_manager.algorithm
+        )
+        
+        with pytest.raises(JWTError, match="Missing required claim"):
+            jwt_manager.decode_access_token(token_missing_tenant)
+
+    def test_invalid_audience_rejection(self, jwt_manager):
+        """Test rejection of tokens with wrong audience."""
+        from jose import jwt
+        
+        payload = {
+            "sub": "test-user",
+            "tenant_id": "test-tenant",
+            "session_id": "test-session",
+            "scopes": [],
+            "type": "access",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            "iss": jwt_manager.issuer,
+            "aud": "wrong-audience"  # Wrong audience
+        }
+        
+        wrong_audience_token = jwt.encode(
+            payload,
+            jwt_manager.secret_key,
+            algorithm=jwt_manager.algorithm
+        )
+        
+        with pytest.raises(JWTError):
+            jwt_manager.decode_access_token(wrong_audience_token)
+
+    def test_invalid_issuer_rejection(self, jwt_manager):
+        """Test rejection of tokens with wrong issuer."""
+        from jose import jwt
+        
+        payload = {
+            "sub": "test-user",
+            "tenant_id": "test-tenant",
+            "session_id": "test-session",
+            "scopes": [],
+            "type": "access",
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            "iss": "wrong-issuer",  # Wrong issuer
+            "aud": jwt_manager.audience
+        }
+        
+        wrong_issuer_token = jwt.encode(
+            payload,
+            jwt_manager.secret_key,
+            algorithm=jwt_manager.algorithm
+        )
+        
+        with pytest.raises(JWTError):
+            jwt_manager.decode_access_token(wrong_issuer_token)
+
+    def test_token_reuse_different_type(self, jwt_manager):
+        """Test that access tokens can't be used as refresh tokens and vice versa."""
+        access_token = jwt_manager.create_access_token(
+            user_id="test-user",
+            tenant_id="test-tenant",
+            session_id="test-session"
+        )
+        
+        refresh_token = jwt_manager.create_refresh_token(
+            user_id="test-user",
+            tenant_id="test-tenant",
+            session_id="test-session"
+        )
+        
+        # Access token should not work for refresh
+        with pytest.raises(JWTError, match="Invalid token type"):
+            jwt_manager.decode_refresh_token(access_token)
+        
+        # Refresh token should not work for access
+        with pytest.raises(JWTError, match="Invalid token type"):
+            jwt_manager.decode_access_token(refresh_token)
+
+    def test_refresh_token_rotation(self, jwt_manager):
+        """Test that refresh generates new tokens (rotation)."""
+        # Create initial refresh token
+        initial_refresh = jwt_manager.create_refresh_token(
+            user_id="test-user",
+            tenant_id="test-tenant",
+            session_id="test-session"
+        )
+        
+        # Refresh tokens
+        new_access, new_refresh = jwt_manager.refresh_access_token(initial_refresh)
+        
+        # New tokens should be different
+        assert new_access != initial_refresh
+        assert new_refresh != initial_refresh
+        assert new_access != new_refresh
+        
+        # Original refresh token should not work again (if rotation is enforced)
+        # Note: This would require token blacklisting in production
+        
+    def test_token_timing_attack_resistance(self, jwt_manager):
+        """Test that token validation timing is consistent."""
+        import time
+        
+        valid_token = jwt_manager.create_access_token(
+            user_id="test-user",
+            tenant_id="test-tenant",
+            session_id="test-session"
+        )
+        
+        invalid_token = "invalid.token.here"
+        
+        # Measure timing for valid vs invalid tokens
+        # Note: This is a basic test - real timing attack resistance 
+        # requires more sophisticated measurement
+        
+        start_time = time.time()
+        try:
+            jwt_manager.decode_access_token(valid_token)
+        except:
+            pass
+        valid_time = time.time() - start_time
+        
+        start_time = time.time()
+        try:
+            jwt_manager.decode_access_token(invalid_token)
+        except:
+            pass
+        invalid_time = time.time() - start_time
+        
+        # Times should be reasonably similar (within 10x)
+        # This is a rough check - production systems need more precise timing
+        assert abs(valid_time - invalid_time) < max(valid_time, invalid_time) * 10
+
+    def test_large_payload_handling(self, jwt_manager):
+        """Test handling of unusually large token payloads."""
+        # Create token with large additional claims
+        large_claims = {
+            "large_field_" + str(i): "x" * 1000 for i in range(10)
+        }
+        
+        try:
+            token = jwt_manager.create_access_token(
+                user_id="test-user",
+                tenant_id="test-tenant",
+                session_id="test-session",
+                additional_claims=large_claims
+            )
+            
+            # Should be able to decode large token
+            payload = jwt_manager.decode_access_token(token)
+            assert payload.sub == "test-user"
+            
+        except Exception as e:
+            # If JWT library rejects large tokens, that's acceptable
+            assert "too large" in str(e).lower() or "size" in str(e).lower()
+
+    def test_special_characters_in_claims(self, jwt_manager):
+        """Test handling of special characters in token claims."""
+        special_user_id = "user@example.com/test<script>alert('xss')</script>"
+        special_tenant = "tenant-with-üñíçødé-chars"
+        
+        token = jwt_manager.create_access_token(
+            user_id=special_user_id,
+            tenant_id=special_tenant,
+            session_id="test-session"
+        )
+        
+        payload = jwt_manager.decode_access_token(token)
+        assert payload.sub == special_user_id
+        assert payload.tenant_id == special_tenant

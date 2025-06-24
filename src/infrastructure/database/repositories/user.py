@@ -42,8 +42,8 @@ class UserRepository(BaseRepository[User]):
 
     async def update_last_seen(self, user_id: UUID) -> None:
         """Update user's last seen timestamp."""
-        from datetime import datetime
-        await self.update(user_id, last_seen_at=datetime.utcnow())
+        from datetime import UTC, datetime
+        await self.update(user_id, last_seen_at=datetime.now(UTC))
 
 
 class UserDeviceRepository(BaseRepository[UserDevice]):
@@ -67,12 +67,12 @@ class UserDeviceRepository(BaseRepository[UserDevice]):
 
     async def mark_device_used(self, device_id: UUID) -> None:
         """Update device last used timestamp and increment use count."""
-        from datetime import datetime
+        from datetime import UTC, datetime
         device = await self.get(device_id)
         if device:
             await self.update(
                 device_id,
-                last_used_at=datetime.utcnow(),
+                last_used_at=datetime.now(UTC),
                 use_count=device.use_count + 1
             )
 

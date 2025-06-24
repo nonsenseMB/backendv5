@@ -21,7 +21,7 @@ class AuthentikConfig(BaseSettings):
         description="Admin API token for Authentik"
     )
     authentik_public_key_url: str = Field(
-        default="/application/o/nai-backend-dev/jwks/",
+        default="/application/o/nai-frontend/jwks/",
         description="Path to JWKS endpoint"
     )
 
@@ -60,7 +60,7 @@ class AuthentikConfig(BaseSettings):
         description="Expected JWT issuer"
     )
     jwt_audience: str = Field(
-        default="nai-backend-dev",
+        default="nai-frontend",
         description="Expected JWT audience"
     )
     jwt_leeway_seconds: int = Field(

@@ -31,7 +31,7 @@ class User(BaseModel):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
-    last_seen_at = Column(DateTime, nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     # Additional data
     extra_data = Column('metadata', JSON, default=dict)

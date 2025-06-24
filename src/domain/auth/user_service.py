@@ -26,7 +26,7 @@ class UserService:
     ) -> User:
         """Get or create a user by external ID (Authentik ID)."""
         async with self.uow:
-            user_repo = UserRepository(self.uow.session)
+            user_repo = self.uow.users
 
             # Try to find existing user
             user = await user_repo.get_by_external_id(external_id)
@@ -95,18 +95,18 @@ class UserService:
     async def get_by_id(self, user_id: UUID) -> User | None:
         """Get user by ID."""
         async with self.uow:
-            user_repo = UserRepository(self.uow.session)
+            user_repo = self.uow.users
             return await user_repo.get(user_id)
 
     async def get_by_email(self, email: str) -> User | None:
         """Get user by email."""
         async with self.uow:
-            user_repo = UserRepository(self.uow.session)
+            user_repo = self.uow.users
             return await user_repo.get_by_email(email)
 
     async def update_last_seen(self, user_id: UUID) -> None:
         """Update user's last seen timestamp."""
         async with self.uow:
-            user_repo = UserRepository(self.uow.session)
+            user_repo = self.uow.users
             await user_repo.update_last_seen(user_id)
             await self.uow.commit()

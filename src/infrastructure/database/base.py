@@ -3,7 +3,7 @@ Base models for the database layer.
 All models inherit from these base classes.
 """
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Column, DateTime, ForeignKey
@@ -22,8 +22,8 @@ class BaseModel(Base):
     __abstract__ = True
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model to dictionary."""

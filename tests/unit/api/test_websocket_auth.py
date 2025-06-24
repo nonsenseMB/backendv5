@@ -371,12 +371,13 @@ class TestWebSocketAuthFlow:
                 mock_auth_session.return_value = AsyncMock()
                 mock_auth_session.return_value.__aiter__.return_value = [Mock()]
                 with patch('src.api.websocket.auth.AuthAuditService'):
-                    with patch('src.api.websocket.connection_manager.get_async_session') as mock_cm_session:
+                    # Mock the enhanced connection manager and Redis
+                    with patch('src.infrastructure.websocket.connection_manager.get_async_session') as mock_cm_session:
                         mock_cm_session.return_value = AsyncMock()
                         mock_cm_session.return_value.__aiter__.return_value = [Mock()]
-                        with patch('src.api.websocket.connection_manager.AuthAuditService'):
+                        with patch('src.infrastructure.websocket.connection_manager.AuthAuditService'):
                             # Mock Redis
-                            with patch('src.api.websocket.connection_manager.get_redis_client') as mock_redis:
+                            with patch('src.infrastructure.websocket.connection_manager.get_redis_client') as mock_redis:
                                 mock_redis_instance = AsyncMock()
                                 mock_redis_instance.client = AsyncMock()
                                 mock_redis.return_value = mock_redis_instance
@@ -451,12 +452,13 @@ class TestWebSocketAuthFlow:
                 mock_auth_session.return_value = AsyncMock()
                 mock_auth_session.return_value.__aiter__.return_value = [Mock()]
                 with patch('src.api.websocket.auth.AuthAuditService'):
-                    with patch('src.api.websocket.connection_manager.get_async_session') as mock_cm_session:
+                    # Mock the enhanced connection manager and Redis
+                    with patch('src.infrastructure.websocket.connection_manager.get_async_session') as mock_cm_session:
                         mock_cm_session.return_value = AsyncMock()
                         mock_cm_session.return_value.__aiter__.return_value = [Mock()]
-                        with patch('src.api.websocket.connection_manager.AuthAuditService'):
+                        with patch('src.infrastructure.websocket.connection_manager.AuthAuditService'):
                             # Mock Redis
-                            with patch('src.api.websocket.connection_manager.get_redis_client') as mock_redis:
+                            with patch('src.infrastructure.websocket.connection_manager.get_redis_client') as mock_redis:
                                 mock_redis_instance = AsyncMock()
                                 mock_redis_instance.client = AsyncMock()
                                 mock_redis.return_value = mock_redis_instance
