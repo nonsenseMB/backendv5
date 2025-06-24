@@ -51,6 +51,7 @@ class Team(TenantAwareModel):
     # Relationships
     members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
     creator = relationship("User", foreign_keys=[created_by])
+    agents = relationship("Agent", back_populates="team")
 
 
     def __repr__(self):
