@@ -1,6 +1,7 @@
 """API v1 router."""
 from fastapi import APIRouter
 
+from .agents.router import router as agents_router
 from .auth.router import router as auth_router
 from .permissions.router import router as permissions_router
 from .teams.router import router as teams_router
@@ -10,6 +11,7 @@ from .users.router import router as users_router
 router = APIRouter(prefix="/api/v1")
 
 # Include module routers
+router.include_router(agents_router)
 router.include_router(auth_router)
 router.include_router(permissions_router)
 router.include_router(teams_router)
