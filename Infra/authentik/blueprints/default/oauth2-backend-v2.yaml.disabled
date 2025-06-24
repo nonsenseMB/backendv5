@@ -1,0 +1,41 @@
+version: 1
+metadata:
+  name: nAI Backend OAuth2 Application - Working
+  labels:
+    blueprints.goauthentik.io/description: OAuth2 Provider and Application for nAI Backend
+entries:
+  # OAuth2 Provider für Backend
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    id: provider-nai-backend-v2
+    identifiers:
+      name: nAI Backend Provider V2
+    attrs:
+      name: nAI Backend Provider V2
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: confidential
+      client_id: nai-backend
+      client_secret: !Env AUTHENTIK_BACKEND_CLIENT_SECRET
+      # Als String mit Zeilenumbrüchen wie in schema.json beschrieben
+      redirect_uris: |
+        http://localhost:8000/api/v1/auth/callback
+        http://localhost:8000/api/v1/docs/oauth2-redirect
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+      access_code_validity: minutes=1
+      access_token_validity: hours=24
+      refresh_token_validity: days=30
+
+  # Application für Backend
+  - model: authentik_core.application
+    state: present
+    id: app-nai-backend-v2
+    identifiers:
+      slug: nai-backend
+    attrs:
+      name: nAI Backend
+      slug: nai-backend
+      provider: !KeyOf provider-nai-backend-v2
+      policy_engine_mode: any

@@ -121,16 +121,41 @@ def _add_request_context(
 ) -> dict[str, Any]:
     """Add request context (tenant_id, request_id, etc.) to log events."""
     try:
-        from src.core.context import get_request_context
+        from src.core.context import get_request_context, get_user_context
 
-        context = get_request_context()
-        if context:
-            if context.tenant_id:
-                event_dict["tenant_id"] = context.tenant_id
-            if context.request_id:
-                event_dict["request_id"] = context.request_id
-            if context.user_id:
-                event_dict["user_id"] = context.user_id
+        # Add request context
+        request_context = get_request_context()
+        if request_context:
+            # Core identifiers
+            if request_context.tenant_id:
+                event_dict["tenant_id"] = request_context.tenant_id
+            if request_context.request_id:
+                event_dict["request_id"] = request_context.request_id
+            if request_context.user_id:
+                event_dict["user_id"] = request_context.user_id
+            if request_context.session_id:
+                event_dict["session_id"] = request_context.session_id
+
+            # Request details
+            if request_context.method:
+                event_dict["method"] = request_context.method
+            if request_context.path:
+                event_dict["path"] = request_context.path
+            if request_context.ip_address:
+                event_dict["ip_address"] = request_context.ip_address
+            if request_context.device_id:
+                event_dict["device_id"] = request_context.device_id
+
+        # Add user context
+        user_context = get_user_context()
+        if user_context:
+            if user_context.email:
+                event_dict["user_email"] = user_context.email
+            if user_context.username:
+                event_dict["username"] = user_context.username
+            # Add user permissions count for debugging
+            event_dict["user_permissions_count"] = len(user_context.permissions)
+
     except Exception:
         # Don't fail logging if context extraction fails
         pass
@@ -139,31 +164,31 @@ def _add_request_context(
 
 def _create_processor_chain(config: LogConfig, use_console_renderer: bool = False) -> list:
     """Create the full processor chain based on configuration.
-    
+
     Args:
     ----
         config: Logging configuration
         use_console_renderer: Whether to use console renderer (vs JSON)
-        
+
     Returns:
     -------
         List of processors for structlog
-        
+
     """
     processors = []
-    
+
     # Add PII redaction filter as FIRST processor for GDPR compliance
     if config.enable_pii_filtering:
         from .filters import PIIRedactionFilter
         processors.append(PIIRedactionFilter())
-    
+
     # Add timestamp if configured
     if config.add_timestamp:
         processors.append(structlog.processors.TimeStamper(fmt="iso"))
-    
+
     # Add standard processors
     processors.extend(_add_custom_processors())
-    
+
     # Add caller info if configured
     if config.add_caller_info:
         processors.append(
@@ -175,25 +200,25 @@ def _create_processor_chain(config: LogConfig, use_console_renderer: bool = Fals
                 ]
             )
         )
-    
+
     # Add thread info if configured
     if config.add_thread_info:
         processors.append(structlog.processors.add_thread_info)
-    
+
     # Add final renderer
     if use_console_renderer and config.format == LogFormat.CONSOLE:
         try:
             from src.core.logging.console import RichConsoleRenderer
             processors.append(RichConsoleRenderer(
-                show_path=True, 
-                show_timestamp=True, 
+                show_path=True,
+                show_timestamp=True,
                 show_tenant=True
             ))
         except ImportError:
             processors.append(structlog.dev.ConsoleRenderer())
     else:
         processors.append(structlog.processors.JSONRenderer())
-    
+
     return processors
 
 
@@ -275,10 +300,10 @@ def configure_logging(config: LogConfig | None = None) -> None:
     # Create console handler with custom formatting
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(config.level.value)
-    
+
     # Create console processors (with Rich formatting)
     console_processors = _create_processor_chain(config, use_console_renderer=True)
-    
+
     # Create console formatter
     console_formatter = structlog.stdlib.ProcessorFormatter(
         processor=structlog.dev.ConsoleRenderer() if config.format == LogFormat.JSON else console_processors[-1],
@@ -286,7 +311,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
-    
+
     # Add file handler if log_file_path is configured
     if config.log_file_path:
         try:
@@ -294,7 +319,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
             log_path = Path(config.log_file_path)
             log_dir = log_path.parent
             log_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Create file handler with rotation support
             from logging.handlers import RotatingFileHandler
             file_handler = RotatingFileHandler(
@@ -304,10 +329,10 @@ def configure_logging(config: LogConfig | None = None) -> None:
                 encoding='utf-8'
             )
             file_handler.setLevel(config.level.value)
-            
+
             # Create file processors (always JSON for files)
             file_processors = _create_processor_chain(config, use_console_renderer=False)
-            
+
             # Create file formatter
             file_formatter = structlog.stdlib.ProcessorFormatter(
                 processor=structlog.processors.JSONRenderer(),
@@ -315,12 +340,12 @@ def configure_logging(config: LogConfig | None = None) -> None:
             )
             file_handler.setFormatter(file_formatter)
             root_logger.addHandler(file_handler)
-            
+
             print(f"📝 Logging to file: {config.log_file_path}")
         except Exception as e:
             print(f"⚠️  WARNING: Could not create log file at {config.log_file_path}: {e}")
             print("⚠️  Falling back to console-only logging")
-    
+
     # Configure structlog
     structlog.configure(
         processors=console_processors if config.format == LogFormat.CONSOLE else file_processors,
@@ -329,7 +354,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-    
+
     # Log compliance status
     if config.enable_pii_filtering:
         print("🔒 PII filtering ENABLED for GDPR compliance")

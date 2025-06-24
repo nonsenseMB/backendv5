@@ -228,7 +228,40 @@ class PIIRedactionFilter:
             Tuple of (redacted_text, statistics)
 
         """
+        import re
+        
+        # Step 1: Find and temporarily mask protected patterns to avoid false positives
+        protected_patterns = [
+            # UUIDs
+            (r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b', 'UUID'),
+            # ISO timestamps and time formats
+            (r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?', 'TIMESTAMP'),
+            (r'\b\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\b', 'TIME_FORMAT'),
+            # Decimal numbers with units (measurements, durations)
+            (r'\b\d+\.\d+(?:s|ms|%|MB|KB|GB|Hz|MHz|GHz)\b', 'DECIMAL_WITH_UNIT'),
+            # Pi and other mathematical constants (specific patterns)
+            (r'\b3\.14159\b', 'MATH_CONSTANT'),
+            (r'\b2\.71828\b', 'MATH_CONSTANT'),
+            # SQL parameter placeholders
+            (r'\$\d+::', 'SQL_PARAM'),
+        ]
+        
+        protected_map = {}
         redacted = text
+        placeholder_counter = 0
+        
+        # Replace protected patterns with temporary placeholders
+        for pattern, pattern_type in protected_patterns:
+            matches = list(re.finditer(pattern, redacted))
+            for match in reversed(matches):
+                start, end = match.span()
+                protected_value = match.group()
+                placeholder = f"__PROTECTED_{pattern_type}_{placeholder_counter}__"
+                protected_map[placeholder] = protected_value
+                redacted = redacted[:start] + placeholder + redacted[end:]
+                placeholder_counter += 1
+        
+        # Step 2: Apply normal PII redaction rules
         stats: dict[str, int] = {}
 
         for rule in self.rules:
@@ -255,6 +288,10 @@ class PIIRedactionFilter:
                     replacement = rule.replacement
 
                 redacted = redacted[:start] + replacement + redacted[end:]
+
+        # Step 3: Restore protected patterns from placeholders
+        for placeholder, protected_value in protected_map.items():
+            redacted = redacted.replace(placeholder, protected_value)
 
         # Aggregate api_key_prefix stats into api_key for compatibility
         if "api_key_prefix" in stats:

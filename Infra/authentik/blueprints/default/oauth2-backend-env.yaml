@@ -1,0 +1,50 @@
+version: 1
+metadata:
+  name: nAI Backend OAuth2 Application - Environment Based
+  labels:
+    blueprints.goauthentik.io/description: OAuth2 Provider with environment-based redirect URIs
+entries:
+  # OAuth2 Provider for Backend
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    id: provider-nai-backend-env
+    identifiers:
+      name: nAI Backend Provider
+    attrs:
+      name: nAI Backend Provider
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: confidential
+      client_id: !Env AUTHENTIK_BACKEND_CLIENT_ID|nai-backend
+      client_secret: !Env AUTHENTIK_BACKEND_CLIENT_SECRET
+      # Use environment variable for redirect URIs
+      redirect_uris: !Env AUTHENTIK_BACKEND_REDIRECT_URIS
+      authorization_grant_type:
+        - authorization_code
+        - refresh_token
+        - client_credentials
+        - password
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+      access_code_validity: minutes=1
+      access_token_validity: hours=24
+      refresh_token_validity: days=30
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+
+  # Application for Backend
+  - model: authentik_core.application
+    state: present
+    id: app-nai-backend-env
+    identifiers:
+      slug: nai-backend
+    attrs:
+      name: !Env AUTHENTIK_BACKEND_APP_NAME|nAI Backend
+      slug: nai-backend
+      provider: !KeyOf provider-nai-backend-env
+      meta_launch_url: !Env AUTHENTIK_BACKEND_URL|http://localhost:8000
+      meta_description: !Env AUTHENTIK_BACKEND_DESCRIPTION|nAI Backend API Service
+      policy_engine_mode: any

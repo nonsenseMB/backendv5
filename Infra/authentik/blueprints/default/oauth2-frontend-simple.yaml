@@ -1,0 +1,42 @@
+version: 1
+metadata:
+  name: nAI Frontend OAuth2 Application - Simple
+  labels:
+    blueprints.goauthentik.io/description: OAuth2 Provider and Application for nAI Frontend
+entries:
+  # OAuth2 Provider für Frontend
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    id: provider-nai-frontend-simple
+    identifiers:
+      name: nAI Frontend Provider Simple
+    attrs:
+      name: nAI Frontend Provider Simple
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      client_type: public
+      client_id: nai-frontend
+      redirect_uris:
+        - http://localhost:3000/auth/callback
+        - http://localhost:3000/api/auth/callback/authentik
+        - http://localhost:3001/auth/callback
+        - http://localhost:3001/api/auth/callback/authentik
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      issuer_mode: per_provider
+      access_code_validity: minutes=1
+      access_token_validity: hours=8
+      refresh_token_validity: days=7
+
+  # Application für Frontend
+  - model: authentik_core.application
+    state: present
+    id: app-nai-frontend-simple
+    identifiers:
+      slug: nai-frontend
+    attrs:
+      name: nAI Frontend
+      slug: nai-frontend
+      provider: !KeyOf provider-nai-frontend-simple
+      policy_engine_mode: any
+      open_in_new_tab: true

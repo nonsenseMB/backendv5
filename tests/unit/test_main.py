@@ -31,13 +31,13 @@ class TestMainApp:
     async def test_lifespan_context_manager(self, capsys):
         """Test the lifespan context manager."""
         from src.core.config import settings
-        
+
         # Test the lifespan context manager
         async with lifespan(app):
             # Check startup message
             captured = capsys.readouterr()
             assert f"Starting {settings.APP_NAME} v{settings.APP_VERSION}" in captured.out
-        
+
         # Check shutdown message
         captured = capsys.readouterr()
         assert "Shutting down..." in captured.out
@@ -55,7 +55,7 @@ class TestRootEndpoint:
         """Test root endpoint response structure."""
         response = client.get("/")
         data = response.json()
-        
+
         assert "name" in data
         assert "version" in data
         assert "status" in data
@@ -63,10 +63,10 @@ class TestRootEndpoint:
     def test_root_endpoint_response_values(self, client: TestClient):
         """Test root endpoint response values."""
         from src.core.config import settings
-        
+
         response = client.get("/")
         data = response.json()
-        
+
         assert data["name"] == settings.APP_NAME
         assert data["version"] == settings.APP_VERSION
         assert data["status"] == "running"
@@ -84,7 +84,7 @@ class TestHealthEndpoint:
         """Test health endpoint response."""
         response = client.get("/health")
         data = response.json()
-        
+
         assert data == {"status": "healthy"}
 
     @pytest.mark.asyncio
