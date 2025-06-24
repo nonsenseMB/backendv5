@@ -44,6 +44,8 @@ nAI Backend is an enterprise-ready platform for creating AI-powered applications
 
 - **[Features](./features/)** - Feature-specific documentation
   - [Authentication](./features/authentication/) - Auth system
+  - [Team Management](./features/team-management/) - Teams and collaboration ⭐
+  - [Logging](./features/logging/) - Structured logging with GDPR compliance
   - [Chat](./features/chat/) - Chat functionality
   - [Memory](./features/memory/) - Vector memory system
   - [Agents](./features/agents/) - AI agent system
@@ -106,6 +108,7 @@ nAI Backend is an enterprise-ready platform for creating AI-powered applications
 - Security middleware (CORS, Rate Limiting, Headers)
 - Comprehensive logging and tracing
 - Audit system
+- Teams CRUD API (Sprint 200) ✅
 
 ### In Progress (Sprint 4) ⚠️
 - LangGraph integration
@@ -115,7 +118,7 @@ nAI Backend is an enterprise-ready platform for creating AI-powered applications
 - LLM provider abstraction (Claude, OpenAI)
 
 ### Upcoming (Sprint 5+) 🔴
-- Team collaboration features
+- Advanced team collaboration features (real-time sync)
 - Vector store integration (Milvus)
 - SharePoint/O365 integration
 - Google Workspace connector
