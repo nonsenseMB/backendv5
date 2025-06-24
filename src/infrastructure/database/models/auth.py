@@ -65,6 +65,7 @@ class UserDevice(BaseModel):
     credential_id = Column(String(255), unique=True, nullable=True)
     public_key = Column(Text, nullable=True)
     attestation_object = Column(JSON, nullable=True)
+    sign_count = Column(Integer, default=0)  # For replay protection
 
     # Trust
     is_trusted = Column(Boolean, default=False)
@@ -83,7 +84,60 @@ class UserDevice(BaseModel):
 
     # Relationships
     user = relationship("User", back_populates="devices")
+    certificates = relationship("DeviceCertificate", back_populates="device", cascade="all, delete-orphan")
 
 
     def __repr__(self):
         return f"<UserDevice(user_id={self.user_id}, device_name='{self.device_name}', type='{self.device_type}')>"
+
+
+class DeviceCertificate(BaseModel):
+    """
+    X.509 device certificates for enterprise authentication.
+    Enables mutual TLS and certificate-based device authentication.
+    """
+    __tablename__ = 'device_certificates'
+    
+    # Certificate identification
+    device_id = Column(UUID(as_uuid=True), ForeignKey('user_devices.id', ondelete='CASCADE'), nullable=False)
+    certificate = Column(Text, nullable=False)  # PEM encoded certificate
+    certificate_chain = Column(Text, nullable=True)  # PEM encoded chain
+    serial_number = Column(String(255), unique=True, nullable=False)
+    fingerprint_sha256 = Column(String(64), unique=True, nullable=False)  # Hex encoded
+    
+    # Certificate details
+    issuer_dn = Column(Text, nullable=False)  # Distinguished Name
+    subject_dn = Column(Text, nullable=False)  # Distinguished Name
+    common_name = Column(String(255), nullable=False)
+    san_dns_names = Column(JSON, default=list)  # Subject Alternative Names
+    san_ip_addresses = Column(JSON, default=list)
+    
+    # Certificate validity
+    not_before = Column(DateTime, nullable=False)
+    not_after = Column(DateTime, nullable=False)
+    key_usage = Column(JSON, nullable=True)  # List of key usage extensions
+    extended_key_usage = Column(JSON, nullable=True)  # List of extended key usage
+    
+    # Certificate status
+    is_active = Column(Boolean, default=True)
+    revoked = Column(Boolean, default=False)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String(255), nullable=True)
+    
+    # OCSP/CRL info
+    ocsp_url = Column(Text, nullable=True)
+    crl_distribution_points = Column(JSON, default=list)
+    last_ocsp_check = Column(DateTime, nullable=True)
+    last_crl_check = Column(DateTime, nullable=True)
+    
+    # Trust and compliance
+    is_trusted = Column(Boolean, default=False)
+    trust_chain_verified = Column(Boolean, default=False)
+    compliance_checked = Column(Boolean, default=False)
+    compliance_notes = Column(Text, nullable=True)
+    
+    # Relationships
+    device = relationship("UserDevice", back_populates="certificates")
+    
+    def __repr__(self):
+        return f"<DeviceCertificate(serial={self.serial_number}, cn='{self.common_name}', device_id={self.device_id})>"

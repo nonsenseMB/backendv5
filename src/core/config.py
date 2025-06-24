@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Backend v5"
     APP_VERSION: str = "0.1.0"
+    APP_DOMAIN: str = "localhost"
     DEBUG: bool = False
     APP_ENV: str = "production"
 

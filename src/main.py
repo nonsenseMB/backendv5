@@ -140,6 +140,13 @@ async def tenant_middleware(request: Request, call_next):
     from src.api.middleware.tenant import tenant_injection_middleware
     return await tenant_injection_middleware(request, call_next)
 
+# Permission checking middleware - checks route-based permissions
+@app.middleware("http")
+async def permission_middleware(request: Request, call_next):
+    """Permission checking middleware."""
+    from src.api.middleware.permissions import permission_middleware
+    return await permission_middleware(request, call_next)
+
 # Logging middleware - MUST be added after auth and tenant to log full context
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):

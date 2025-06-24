@@ -2,12 +2,15 @@
 from fastapi import APIRouter
 
 from .token import router as token_router
+from .device_endpoints import router as device_router
+from .certificate_endpoints import router as certificate_router
+from .device_management import router as device_management_router
 
 # Create the main auth router
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # Include sub-routers
 router.include_router(token_router)
-
-# Additional auth endpoints can be added here in the future
-# For example: device registration, WebAuthn, etc.
+router.include_router(device_router)
+router.include_router(certificate_router)
+router.include_router(device_management_router)

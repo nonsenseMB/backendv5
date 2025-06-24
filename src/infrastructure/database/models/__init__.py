@@ -10,6 +10,7 @@ from .document import Document, DocumentContent, DocumentPermission, DocumentSha
 from .knowledge import DocumentVector, KnowledgeBase, KnowledgeEntity, KnowledgeRelation
 from .llm import LLMAPIKey, LLMProvider
 from .memory import UserPreferences
+from .permission import Permission, Role, RolePermission, UserRole, ResourcePermission
 from .team import Team, TeamMember
 from .tenant import Tenant, TenantUser
 from .tool import MCPServer, Tool, ToolDefinition, ToolExecution
@@ -21,6 +22,12 @@ __all__ = [
     # Auth models
     "User",
     "UserDevice",
+    # Permission models
+    "Permission",
+    "Role",
+    "RolePermission",
+    "UserRole",
+    "ResourcePermission",
     # LLM models
     "LLMProvider",
     "LLMAPIKey",

@@ -1,0 +1,1 @@
+"""Permission management API endpoints."""

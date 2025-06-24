@@ -1,16 +1,18 @@
 """
 Permission-based authorization dependencies for FastAPI endpoints.
 Provides fine-grained access control based on user permissions.
+Updated to use the new permission system from task-130.
 """
-from typing import List, Set
+from typing import Callable, List, Optional, Set
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
-from src.api.dependencies.auth import get_current_user
-from src.api.dependencies.tenant import get_tenant_user
-from src.core.logging import get_logger
-from src.infrastructure.database.models.auth import User
-from src.infrastructure.database.models.tenant import TenantUser
+from ...core.auth.permissions import PermissionChecker
+from ...infrastructure.database.session import get_db
+from .context import get_current_user, get_tenant_context
+from ...core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -85,43 +87,53 @@ def _check_permission(
     return False
 
 
-def require_permission(permission: str):
+def require_permission(permission: str, resource_type: Optional[str] = None) -> Callable:
     """
     Create a dependency that requires a specific permission.
+    Uses the new permission system from task-130.
     
     Args:
-        permission: The required permission (e.g., "users:read", "teams:write")
+        permission: Required permission (e.g., 'conversation.create')
+        resource_type: Optional resource type for resource-level checks
         
     Returns:
-        Dependency function that validates the permission
+        FastAPI dependency function
     """
-    async def check_permission(
-        request: Request,
-        current_user: User = Depends(get_current_user),
-    ) -> User:
-        """Check if the current user has the required permission."""
-        user_permissions = _get_user_permissions(request)
+    async def permission_dependency(
+        current_user: dict = Depends(get_current_user),
+        tenant_id: UUID = Depends(get_tenant_context),
+        db: Session = Depends(get_db)
+    ) -> None:
+        """Check if current user has the required permission."""
+        checker = PermissionChecker(db)
         
-        if not _check_permission(user_permissions, permission, str(current_user.id)):
+        has_permission = await checker.check_permission(
+            user_id=current_user["id"],
+            tenant_id=tenant_id,
+            permission=permission,
+            resource_type=resource_type
+        )
+        
+        if not has_permission:
             logger.warning(
                 "Permission denied",
-                user_id=str(current_user.id),
+                user_id=str(current_user["id"]),
+                tenant_id=str(tenant_id),
                 required_permission=permission,
-                user_permissions=list(user_permissions)
+                resource_type=resource_type
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission '{permission}' required",
+                detail=f"Insufficient permissions. Required: {permission}"
             )
         
         logger.debug(
             "Permission granted",
-            user_id=str(current_user.id),
+            user_id=str(current_user["id"]),
             permission=permission
         )
-        return current_user
     
-    return check_permission
+    return permission_dependency
 
 
 def require_any_permission(permissions: List[str]):
